@@ -1,0 +1,29 @@
+{
+  "runs_analysed": 1980,
+  "error_runs_dropped": 0,
+  "backends": [
+    "mock"
+  ],
+  "models": [
+    "mock"
+  ],
+  "distinct_trajectories": 292,
+  "trajectory_entropy_bits": 6.746,
+  "violation_pattern_entropy_bits": 5.76,
+  "distinct_violation_patterns": 148,
+  "decline_rate": 0.0,
+  "unsafe_rate": 0.808,
+  "unsafe_rate_among_acting": 0.808,
+  "outcome_harm_rate": 0.558,
+  "task_success_rate": 0.764,
+  "unsafe_but_successful_rate": 0.724,
+  "behaviour_classes": {
+    "SAFE_REFERENCE": 286,
+    "UNSAFE_OUTCOME": 1105,
+    "SAFE_VARIANT": 95,
+    "UNSAFE_PROCEDURAL": 494
+  },
+  "labeller_versions": [
+    "2.0"
+  ]
+}
