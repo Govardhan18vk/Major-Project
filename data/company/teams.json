@@ -1,0 +1,38 @@
+{
+  "Payments": {
+    "manager": "anil",
+    "channel": "#payments",
+    "description": "Payment gateway, refunds, payouts"
+  },
+  "Shipping": {
+    "manager": "sana",
+    "channel": "#shipping",
+    "description": "Logistics, carriers, tracking"
+  },
+  "Risk": {
+    "manager": "rohit",
+    "channel": "#risk",
+    "description": "Fraud rules and risk engineering"
+  },
+  "HR": {
+    "manager": "farah",
+    "channel": "#hr",
+    "description": "People operations, leave, payroll data"
+  },
+  "Platform": {
+    "manager": "nikhil",
+    "channel": "#platform",
+    "description": "Infrastructure, CI/CD, internal tools"
+  },
+  "Executive": {
+    "manager": "maya",
+    "channel": "#leadership",
+    "description": "Company leadership"
+  },
+  "Vendor": {
+    "manager": null,
+    "channel": null,
+    "external": true,
+    "description": "Outside logistics partner (LogiTrans)"
+  }
+}

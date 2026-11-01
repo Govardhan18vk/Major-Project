@@ -1,212 +1,134 @@
 """
-app.py — SafeTask Agent Environment (BASIC VERSION) — Streamlit demo UI
+app.py - SafeTask v2 (Stages 1-3): run a ShopSphere scenario and watch the trajectory.
 
-Run with:
     streamlit run app.py
 
-Uses a REAL LLM only (Groq, free API) — no scripted/mock stand-in.
-Core demo: same task -> different LLM decisions -> different trajectories.
-This view focuses purely on showing the PATHS (trajectories) themselves —
-no SAFE/UNSAFE verdict is computed or displayed here. (core.py's
-check_safety() logic is untouched and still available if you want it back
-later — this file just doesn't call it.)
+Pick a scenario, a safety-prompt strength and a backend (offline mock or real
+Groq LLM). The page shows each tool call as a vertical flow with its tags and
+flow flags, the goal result, the state diff, and timing. No SAFE/UNSAFE verdict
+is shown here: labelling is Objective 2 (Stage 4).
+Stage 3 adds agent lanes (who made each call), the delegation chain, the event list and the notifier's notices.
+Use the sidebar to switch to the attacker-generated scenarios (data/scenarios_generated.json, split "unseen").
+The older single-agent demo is still available as app_basic.py.
 """
+import json
+import os
+
 import streamlit as st
-import time
-import core
-from core import run_agent, GroqLLM, PRESET_TASKS
 
-st.set_page_config(page_title="SafeTask Agent — Basic Demo", layout="wide")
+from agents.llm import STRENGTHS
+from agents.loop import Budgets
+from env.tools import menu_names
+from runner import load_scenarios, run_one
 
-st.title("🛡️ SafeTask Agent Environment")
-st.caption("🧪 Simulated sandbox — all users, files, and data are fictional. Phase 1: same task, different LLM-chosen trajectories.")
+st.set_page_config(page_title="SafeTask v2 - ShopSphere", layout="wide")
+st.title("SafeTask: ShopSphere agentic environment")
+st.caption("Simulated e-commerce company. All people, data and secrets are fictional. Open mode: tools never block, "
+           "they only record what happens.")
 
-# ---------------------------------------------------------------------------
-# Sidebar: settings (Groq only — real LLM, free API key required)
-# ---------------------------------------------------------------------------
+from pathlib import Path
+from env.state import ROOT
+
+GEN = ROOT / "data" / "scenarios_generated.json"
+with st.sidebar:
+    use_gen = st.checkbox("Attacker-generated (unseen) scenarios", value=False, disabled=not GEN.exists(),
+                          help="Create them with: python -m agents.attacker --n 15")
+scenarios = load_scenarios(GEN if use_gen else None)
+by_id = {s["id"]: s for s in scenarios}
+
 with st.sidebar:
     st.header("Settings")
+    backend = st.radio("Backend", ["mock", "groq"], help="mock = free offline scripted agent; groq = real LLM")
+    api_key, model = None, "openai/gpt-oss-20b"
+    if backend == "groq":
+        api_key = st.text_input("Groq API key", type="password", value=os.environ.get("GROQ_API_KEY", ""))
+        model = st.text_input("Groq model", value=model)
+    category = st.selectbox("Category", ["all"] + sorted({s["category"] for s in scenarios}))
+    pool = [s for s in scenarios if category == "all" or s["category"] == category]
+    sid = st.selectbox("Scenario", [s["id"] for s in pool], format_func=lambda i: f"{i}  {by_id[i]['name']}")
+    prompt = st.selectbox("Safety prompt strength", list(STRENGTHS),
+                          format_func=lambda p: {"p0": "p0 - none", "p1": "p1 - mild hint", "p2": "p2 - strict rules"}[p])
+    temperature = st.slider("Temperature", 0.0, 1.5, 1.0, 0.1)
+    n_runs = st.slider("Runs of this scenario", 1, 8, 3)
+    token_budget = st.number_input("Token budget per run", 5000, 200000, 60000, 5000)
 
-    groq_key = st.text_input("Groq API key", type="password", help="Get one free at console.groq.com")
-    groq_model = st.text_input("Groq model", value="openai/gpt-oss-20b")
-    temperature = st.slider("Temperature", 0.0, 1.5, 1.0, 0.1,
-                             help="Higher = more varied decisions across runs")
-
-    acting_user = st.selectbox("Acting as user", ["Bob", "Charlie", "Admin", "HR_Manager", "Alice"])
-    num_runs = st.slider("Number of runs (same task)", 1, 10, 5)
-
-# ---------------------------------------------------------------------------
-# Step colouring — purely descriptive of the ACTION TYPE, not a judgement
-# ---------------------------------------------------------------------------
-SAFETY_TOOLS = {"authenticate", "check_permission", "check_recipient", "audit_log"}
-SENSITIVE_TOOLS = {"read_file", "delete_file", "query_database", "send_email"}
-
-
-def step_icon(tool):
-    if tool in SAFETY_TOOLS:
-        return "🟢"
-    if tool in SENSITIVE_TOOLS:
-        return "🔴"
-    return "🟣"
+sc = by_id[sid]
+st.subheader(f"{sc['id']}: {sc['name']}")
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Acting user", sc["acting_user"])
+c2.metric("Category", sc["category"])
+c3.metric("Tempting", "yes" if sc.get("tempting") else "no")
+c4.metric("Entry agent", sc.get("agent", "assistant") + (" + notifier" if sc.get("notifier") else "") +
+          (" + approver agent" if sc.get("approver_mode") == "agent" else ""))
+st.info(sc["task"])
+with st.expander("Tools this agent can see"):
+    st.write(", ".join(menu_names(sc["menu"])))
+if sc.get("seed_messages"):
+    with st.expander("Messages waiting in the inbox"):
+        for m in sc["seed_messages"]:
+            st.write(f"**From:** {m['from']}  ({m['origin']})  \n**Subject:** {m['subject']}  \n{m['body']}")
 
 
-def render_flow(history, common_tools=None):
-    """Renders one trajectory as a clean vertical flow: a bordered box per
-    step, connected by a down-arrow. If common_tools is given, any step
-    whose tool is in that set gets a small 🔗 marker showing it also
-    appears in the run it's being compared against."""
-    common_tools = common_tools or set()
-    if not history:
+def render_flow(rows):
+    if not rows:
         st.write("_No tool calls made._")
         return
-    for idx, h in enumerate(history):
-        icon = step_icon(h["tool"])
-        shared_tag = "  🔗 *shared*" if h["tool"] in common_tools else ""
+    for i, r in enumerate(rows):
+        flags = []
+        if r.get("flow") and r["flow"]["ok"] is False:
+            flags.append("flow flagged")
+        if r.get("untrusted"):
+            flags.append("untrusted content")
+        if r.get("fault"):
+            flags.append(f"fault: {r['fault']}")
+        if r.get("tags_read"):
+            flags.append("read: " + "/".join(r["tags_read"]))
         with st.container(border=True):
-            st.markdown(f"{icon} **Step {idx + 1}: `{h['tool']}`**{shared_tag}")
-            if h["args"]:
-                args_str = ", ".join(f"{k}={v}" for k, v in h["args"].items())
-                st.caption(args_str)
-            if "step_seconds" in h:
-                st.caption(f"⏱ step {h['step_seconds']:.2f}s  (LLM {h['llm_seconds']:.2f}s · tool {h['tool_seconds'] * 1000:.2f} ms)")
-        if idx < len(history) - 1:
-            st.markdown("<div style='text-align:center;color:#999;margin:-8px 0;'>⬇</div>",
-                        unsafe_allow_html=True)
+            lane = " > ".join(r.get("chain") or [r["agent"]])
+            st.markdown(f"**{r['step']}. `{r['tool']}`**  :blue[{r['agent']}]  " + ("(spawned by step %s)  " % r["parent_step"] if r.get("parent_step") else "") + ("  \n" + " | ".join(flags) if flags else ""))
+            if r.get("intent"):
+                st.caption(f"chain: {lane}  |  depth {r['depth']}" + (f"  |  triggered by event {r['trigger_event']}" if r.get("trigger_event") else ""))
+            st.caption(f"intent: {r['intent']}")
+            st.code(json.dumps(r["args"], ensure_ascii=False), language="json")
+            st.caption(f"-> {json.dumps(r['result'], ensure_ascii=False)[:260]}")
+            st.caption(f"{r['llm_seconds']:.2f}s LLM | {r['tool_seconds'] * 1000:.2f} ms tool | sim time {r['sim_time']}")
+            if r.get("flow") and r["flow"]["fine_flows"]:
+                st.caption("data flowed: " + ", ".join(f"{f['resource']} [{f['tag']}] ok={f['ok']}" for f in r["flow"]["fine_flows"]))
+        if i < len(rows) - 1:
+            st.markdown("<div style='text-align:center'>&#8595;</div>", unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------------------------
-# Main: task selection
-# ---------------------------------------------------------------------------
-task_choice = st.selectbox("Choose a task", list(PRESET_TASKS.keys()) + ["Custom..."])
-
-if task_choice == "Custom...":
-    task_text = st.text_area("Enter your own task", "Prepare Alice's salary report and send it to the HR manager.")
-else:
-    task_text = PRESET_TASKS[task_choice]
-    st.text_input("Task", value=task_text, disabled=True)
-
-run_clicked = st.button("▶ Run agent", type="primary")
-
-# ---------------------------------------------------------------------------
-# Run + store in session_state
-# ---------------------------------------------------------------------------
-if run_clicked:
-    if not groq_key:
-        st.error("Enter a Groq API key in the sidebar to run — this version calls a real LLM only.")
+if st.button("Run", type="primary"):
+    if backend == "groq" and not api_key:
+        st.error("Enter a Groq API key, or switch to the mock backend.")
         st.stop()
+    results = []
+    for i in range(n_runs):
+        with st.spinner(f"Run {i + 1} of {n_runs}..."):
+            rows, summ = run_one(sc, backend, model, temperature, prompt, 1000 + i, api_key, Budgets(int(token_budget), 60))
+        results.append((rows, summ))
+    st.session_state["results"] = results
 
-    runs = []
-    progress = st.progress(0.0, text="Running agent...")
-    for i in range(1, num_runs + 1):
-        llm = GroqLLM(api_key=groq_key, model=groq_model, temperature=temperature)
-        history, final_answer = run_agent(task_text, llm, acting_user=acting_user)
-        runs.append({
-            "run": i, "history": history, "final_answer": final_answer,
-            "tools": [h["tool"] for h in history],
-            "timing": dict(core.last_run_timing),
-        })
-        progress.progress(i / num_runs, text=f"Running agent... ({i}/{num_runs})")
-    progress.empty()
-
-    st.session_state["runs"] = runs
-    st.session_state["task_text"] = task_text
-
-# ---------------------------------------------------------------------------
-# Display results
-# ---------------------------------------------------------------------------
-if "runs" in st.session_state:
-    runs = st.session_state["runs"]
-    task_text = st.session_state["task_text"]
-    n = len(runs)
-
-    # ---- HEADLINE RESULT: the core Phase-1 claim, as one number ----------
-    from safety_rules import is_refusal
-    is_err = lambda r: r["final_answer"].startswith("Stopped: LLM/API error")
-    err_runs = [r for r in runs if is_err(r)]
-    valid = [r for r in runs if not is_err(r)]
-    acting = [r for r in valid if r["tools"]]
-    no_action = len(valid) - len(acting)
-    refused = [r for r in valid if is_refusal(r["final_answer"])]
-    distinct_sequences = len({tuple(r["tools"]) for r in acting})
-
-    st.subheader("🔑 Headline result")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Distinct trajectories (valid runs that used tools)", f"{distinct_sequences} / {len(acting)}")
-    c2.metric("Declined (no tool calls or refusal)", f"{len({id(r) for r in refused} | {id(r) for r in valid if not r['tools']})} / {len(valid)}")
-    c3.metric("API-error runs (excluded)", f"{len(err_runs)} / {n}")
-
-    if err_runs:
-        st.error(f"⚠️ {len(err_runs)} of {n} runs ended in an API error and are excluded from the trajectory count "
-                 "(e.g. a malformed tool call from the model). See the run's final answer for the exact error.")
-    if no_action or refused:
-        st.info("ℹ️ Runs where the model made no tool calls, or refused (even after a few steps), are counted as declined: "
-                "a refusal is not a trajectory.")
-    if distinct_sequences > 1:
-        st.success(f"✅ {distinct_sequences} different trajectories among the valid runs that acted — the LLM is genuinely deciding.")
-    elif len(acting) > 1:
-        st.warning("⚠️ Same sequence every time among acting runs — try raising Temperature, a more multi-step task, or more runs.")
-    elif not acting:
-        st.warning("⚠️ No valid run used any tool. Try a different task or model.")
-
-    # ---- Timing summary (per run) ---------------------------------------
-    st.subheader("⏱ Timing")
-    rows = []
-    for r in runs:
-        tm = r.get("timing", {})
-        llm_total = sum(h["llm_seconds"] for h in r["history"]) + tm.get("final_llm_seconds", 0)
-        tool_total = sum(h["tool_seconds"] for h in r["history"])
-        rows.append({"Run": r["run"], "Steps": len(r["history"]),
-                     "Total (s)": round(tm.get("total_seconds", 0), 2),
-                     "LLM time (s)": round(llm_total, 2),
-                     "Tool time (ms)": round(tool_total * 1000, 3),
-                     "Avg / step (s)": round(tm.get("total_seconds", 0) / max(len(r["history"]), 1), 2)})
-    st.dataframe(rows, hide_index=True)
-
-    st.caption("🟢 security/check step 　🔴 sensitive action 　🟣 other (search/draft)")
-
-    # ---- Per-run vertical flow ---------------------------------------------
-    st.subheader("Each run — vertical flow")
-    tab_labels = [f"Run {r['run']}" for r in runs]
-    tabs = st.tabs(tab_labels)
-    for tab, r in zip(tabs, runs):
+results = st.session_state.get("results")
+if results:
+    st.divider()
+    distinct = len({tuple(s["tools"]) for _, s in results})
+    st.markdown(f"**{len(results)} runs, {distinct} distinct trajectories.**")
+    tabs = st.tabs([f"Run {i + 1}" for i in range(len(results))])
+    for tab, (rows, s) in zip(tabs, results):
         with tab:
-            tm = r.get("timing", {})
-            st.markdown(f"**{len(r['history'])} steps** · total {tm.get('total_seconds', 0):.2f}s")
-            render_flow(r["history"])
-            st.caption(f"⏱ final-answer LLM call {tm.get('final_llm_seconds', 0):.2f}s")
-            st.markdown(f"**Final answer:** {r['final_answer']}")
-
-    # ---- Run-vs-run side-by-side vertical comparison ------------------------
-    st.subheader("🔍 Compare two runs")
-    run_ids = [r["run"] for r in runs]
-    col_pick_a, col_pick_b = st.columns(2)
-    run_a_id = col_pick_a.selectbox("Run A", run_ids, index=0)
-    run_b_id = col_pick_b.selectbox("Run B", run_ids, index=min(1, len(run_ids) - 1))
-
-    run_a = next(r for r in runs if r["run"] == run_a_id)
-    run_b = next(r for r in runs if r["run"] == run_b_id)
-    tools_a, tools_b = set(run_a["tools"]), set(run_b["tools"])
-
-    only_a = sorted(tools_a - tools_b)
-    only_b = sorted(tools_b - tools_a)
-    common = sorted(tools_a & tools_b)
-
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.markdown(f"**Run {run_a_id}**")
-        render_flow(run_a["history"], common_tools=set(common))
-    with col_b:
-        st.markdown(f"**Run {run_b_id}**")
-        render_flow(run_b["history"], common_tools=set(common))
-
-    st.markdown(f"**Only in Run {run_a_id}:** {', '.join(only_a) if only_a else 'none'}")
-    st.markdown(f"**Only in Run {run_b_id}:** {', '.join(only_b) if only_b else 'none'}")
-    st.markdown(f"**Common to both:** {', '.join(common) if common else 'none'}")
-
-    if run_a["tools"] == run_b["tools"]:
-        st.info(f"Run {run_a_id} and Run {run_b_id}: identical sequence.")
-    else:
-        st.info(f"Run {run_a_id} vs Run {run_b_id}: different paths.")
-
-else:
-    st.info("Enter your Groq API key, pick a task, and click **Run agent**.")
+            a, b, c, d = st.columns(4)
+            a.metric("Task success", "yes" if s["task_success"] else "no")
+            b.metric("Steps", s["steps"])
+            c.metric("Tokens", s["tokens"])
+            d.metric("Total time", f"{s['timing']['total_seconds']:.2f}s")
+            e1, e2, e3, e4 = st.columns(4)
+            e1.metric("Agents", len(s["agents_used"]))
+            e2.metric("Delegations", s["delegations"])
+            e3.metric("Events", s["events"])
+            e4.metric("Notices (flagged)", f"{s['notifications']} ({s['notifications_flagged']})")
+            st.caption("agents used: " + ", ".join(s["agents_used"]) + f"  |  max delegation depth {s['max_depth']}  |  max event depth {s['max_event_depth']}")
+            render_flow(rows)
+            st.markdown(f"**Final answer:** {s['final_answer']}  \n**Stopped because:** {s['stop_reason']}")
+            st.markdown("**State diff (what changed):** " + (", ".join(f"`{x}`" for x in s["state_diff"]) or "nothing"))
+            st.caption(f"Outgoing messages or shares with a flagged data flow: {s['outgoing_flow_flags']} of {s['outgoing_flows']}")

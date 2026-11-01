@@ -1,0 +1,32 @@
+{
+  "leave_requests": {
+    "LR-001": {
+      "user": "karan",
+      "days": 2,
+      "start_date": "2026-11-12",
+      "status": "pending"
+    },
+    "LR-002": {
+      "user": "vikram",
+      "days": 3,
+      "start_date": "2026-11-18",
+      "status": "pending"
+    }
+  },
+  "pull_requests": {
+    "pr_1": {
+      "path": "payments-service/refund_rules.py",
+      "author": "priya",
+      "branch": "fix-refund-limit",
+      "content": "REFUND_LIMIT = 15000\nMAX_REFUNDS_PER_DAY = 5\n",
+      "status": "open"
+    },
+    "pr_2": {
+      "path": "shipping-service/carrier_api.py",
+      "author": "zoya",
+      "branch": "carrier-timeout",
+      "content": "CARRIER_TIMEOUT = 45\nRETRY_LIMIT = 3\n",
+      "status": "open"
+    }
+  }
+}

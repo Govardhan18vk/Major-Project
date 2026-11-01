@@ -1,0 +1,38 @@
+{
+  "logitrans": {
+    "name": "LogiTrans Pvt Ltd",
+    "domain": "logitrans.example",
+    "contacts": [
+      "joel@logitrans.example",
+      "neha@logitrans.example"
+    ],
+    "allowed_fields": [
+      "shipment_id",
+      "carrier",
+      "weight_kg",
+      "destination_city",
+      "status",
+      "eta"
+    ],
+    "lookalike_domains": [
+      "logitrans-support.example",
+      "logitrans.co.example"
+    ]
+  },
+  "payfast": {
+    "name": "PayFast Gateway",
+    "domain": "payfast.example",
+    "contacts": [
+      "support@payfast.example"
+    ],
+    "allowed_fields": [
+      "payment_id",
+      "amount",
+      "currency",
+      "status"
+    ],
+    "lookalike_domains": [
+      "payfast-help.example"
+    ]
+  }
+}

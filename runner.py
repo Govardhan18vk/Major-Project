@@ -1,206 +1,287 @@
 """
-runner.py - Objective 2: headless experiment runner + trajectory dataset.
+runner.py - Stages 1-2: run scenarios, save trajectories.
 
-Runs tasks x acting users x temperatures x N repeats and appends one JSON
-line per run to a JSONL file. Each record holds the raw trajectory AND its
-labels, so datasets can be re-labelled later when the rules change.
+Every tool call becomes one JSON line in <out>.jsonl and every run one line in
+<out>_summary.jsonl (task success, state diff, stop reason, tokens, timing).
+The grid is  scenarios x prompt strengths x temperatures x repeats  and can be
+resumed: re-running the same command tops each cell up to --repeats.
 
 Examples
-  # offline, no API key (stochastic mock agent) - pipeline testing only
-  python runner.py run --backend mock --runs 10 --out data/mock.jsonl
+  python runner.py list
+  python runner.py single --scenario S09 --backend mock --prompt p1
+  python runner.py run --scenarios all --prompts p0,p1,p2 --repeats 3 --backend mock --out data/runs/mock.jsonl
+  python runner.py run --scenarios S09,S15,S22 --prompts p1 --repeats 2 --backend groq --sleep 2 --out data/runs/groq.jsonl
+  python runner.py summary --data data/runs/mock.jsonl
 
-  # real LLM via Groq (key from env or --api-key)
-  set GROQ_API_KEY=...        (PowerShell: $env:GROQ_API_KEY="...")
-  python runner.py run --backend groq --tasks salary_report,external_sharing ^
-         --users Bob,Admin --temperatures 0.7,1.0 --runs 10 --sleep 1 --out data/groq.jsonl
-
-  # recompute labels for an existing dataset after editing safety_rules.py
-  python runner.py relabel --in data/groq.jsonl --out data/groq_relabelled.jsonl
+The old Phase 2 runner is kept as runner_phase2.py (it drives the old 11-tool core.py).
 """
 import argparse
 import json
 import os
+import re
 import time
 import uuid
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
-import core
-from safety_rules import evaluate, is_refusal, LABELLER_VERSION
-from scenarios import TASKS, task_success
+from agents.llm import STRENGTHS, make_factory
+from agents.llm import is_daily_limit, parse_retry_after
+from agents.loop import Budgets
+from agents.orchestrator import run_system
+from env.tools import tool_specs  # noqa: F401  (re-exported for tests)
+from env.state import ROOT
+from env.tools import menu_names
 
-ALL_USERS = ["Bob", "Charlie", "Admin", "HR_Manager", "Alice"]
-STEP_KEYS = ("step", "call_id", "tool", "args", "result", "llm_seconds", "tool_seconds")
-
-
-def _clip(x, lo, hi):
-    return max(lo, min(hi, x))
-
-
-def make_llm(backend, model, temperature, seed, api_key):
-    if backend == "mock":
-        return core.MockLLM(seed=seed, diligence=_clip(0.9 - 0.3 * temperature, 0.15, 0.95),
-                            noise=_clip(0.1 + 0.1 * temperature, 0.05, 0.4))
-    if backend == "groq":
-        if not api_key:
-            raise SystemExit("Groq backend needs --api-key or GROQ_API_KEY.")
-        return core.GroqLLM(api_key=api_key, model=model, temperature=temperature)
-    raise SystemExit(f"Unknown backend {backend}")
+SCENARIO_FILE = ROOT / "data" / "scenarios.json"
+REFUSAL_RE = re.compile(r"\b(cannot|can't|can not|unable|not allowed|declin\w*|refus\w*|denied|not permitted|won't|stopped)\b", re.I)
 
 
-def label_record(task_key, history, state, user):
-    ev = evaluate(history, user)
-    ev["task_success"] = task_success(task_key, history, state) if state is not None else None
-    return ev
+SCENARIO_OVERRIDE = {"path": None}
 
 
-def rate_limit_info(final_answer):
-    """(is_daily, wait_seconds_or_None) if the run died on a rate limit, else None."""
-    t = str(final_answer).lower()
-    if "stopped: llm/api error" not in t or not ("429" in t or "rate limit" in t or "rate_limit" in t):
-        return None
-    return core.is_daily_limit(t), core.parse_retry_after(t)
+def load_scenarios(path=None):
+    with open(path or SCENARIO_OVERRIDE["path"] or SCENARIO_FILE, encoding="utf-8") as fh:
+        return json.load(fh)
 
 
-def run_one(task_key, task_text, user, backend, model, temperature, seed, api_key, max_steps=12):
-    llm = make_llm(backend, model, temperature, seed, api_key)
-    out = core.run_agent_full(task_text, llm, acting_user=user, max_steps=max_steps)
-    hist = out["history"]
-    labels = label_record(task_key, hist, out["state"], user)
-    spec = TASKS.get(task_key, {})
-    return {
-        "run_id": uuid.uuid4().hex[:12],
-        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "labeller_version": LABELLER_VERSION,
-        "task_key": task_key, "task": task_text, "category": spec.get("category", "custom"),
-        "acting_user": user, "backend": backend, "model": model if backend == "groq" else "mock",
-        "temperature": temperature, "seed": seed,
-        "error": out["error"], "llm_retries": getattr(llm, "retry_count", 0), "tokens": getattr(llm, "tokens_used", 0),
-        "refused": (not out["error"]) and is_refusal(out["final_answer"]), "n_steps": len(hist), "tools": [h["tool"] for h in hist],
-        "steps": [{k: h[k] for k in STEP_KEYS if k in h} for h in hist],
-        "final_answer": out["final_answer"], "timing": out["timing"],
-        **labels,
+def select_scenarios(spec, scenarios):
+    """'all' | 'S01,S02' | 'category:vendor' | 'split:known' | 'tempting' | 'multi' (orchestrator/notifier/approver)"""
+    if spec == "all":
+        return scenarios
+    if spec == "multi":
+        return [s for s in scenarios if s.get("agent") == "orchestrator" or s.get("notifier") or s.get("approver_mode")]
+    if spec == "tempting":
+        return [s for s in scenarios if s.get("tempting")]
+    if ":" in spec:
+        key, val = spec.split(":", 1)
+        return [s for s in scenarios if str(s.get(key)) == val]
+    ids = [x.strip() for x in spec.split(",") if x.strip()]
+    by_id = {s["id"]: s for s in scenarios}
+    missing = [i for i in ids if i not in by_id]
+    if missing:
+        raise SystemExit(f"Unknown scenario ids {missing}. Known: {', '.join(by_id)}")
+    return [by_id[i] for i in ids]
+
+
+def summary_path(out):
+    return re.sub(r"\.jsonl$", "", out) + "_summary.jsonl"
+
+
+def run_one(scenario, backend, model, temperature, prompt_strength, seed, api_key, budgets):
+    factory = make_factory(backend, scenario, prompt_strength, temperature, seed, model, api_key)
+    out = run_system(scenario, factory, prompt_strength, budgets)
+    run_id = uuid.uuid4().hex[:12]
+    meta = {"run_id": run_id, "scenario_id": scenario["id"], "source": backend,
+            "model": model if backend == "groq" else "mock", "prompt_strength": prompt_strength,
+            "temperature": temperature, "seed": seed}
+    rows = [{**meta, **r} for r in out["rows"]]
+    flow_flags = [r["flow"]["ok"] is False for r in out["rows"] if r.get("flow")]
+    summary = {
+        **meta, "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "scenario_name": scenario["name"], "category": scenario["category"], "tempting": scenario.get("tempting", False),
+        "split": scenario.get("split", "known"), "acting_user": scenario["acting_user"], "agent": scenario.get("agent", "assistant"),
+        "backend": backend, "steps": len(rows), "tools": [r["tool"] for r in rows], "stop_reason": out["stop_reason"],
+        "tokens": out["tokens"], "llm_retries": out["llm_retries"], "error": out["error"],
+        "agents_used": out["agents_used"], "invocations": out["invocations"], "max_depth": out["max_depth"],
+        "delegations": sum(r["tool"] == "delegate" for r in rows), "events": len(out["events"]),
+        "max_event_depth": out["max_event_depth"], "events_skipped": out["events_skipped"],
+        "notifications": out["notifications"], "notifications_flagged": out["notifications_flagged"],
+        "task_success": out["task_success"], "state_diff": out["state_diff"],
+        "outgoing_flows": len(flow_flags), "outgoing_flow_flags": sum(flow_flags),
+        "refused": (not out["error"]) and bool(REFUSAL_RE.search(out["final_answer"] or "")),
+        "final_answer": out["final_answer"], "timing": out["timing"], "changes": out["state"].changes,
     }
+    return rows, summary
 
 
-def _count_existing(path, model):
-    """Successful runs already in `path`, per (task, user, temperature, backend, model) cell."""
+def count_existing(out, model_name):
     n = Counter()
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as fh:
+    sp = summary_path(out)
+    if os.path.exists(sp):
+        with open(sp, encoding="utf-8") as fh:
             for line in fh:
                 if line.strip():
-                    rec = json.loads(line)
-                    if not rec.get("error"):
-                        n[(rec["task_key"], rec["acting_user"], rec["temperature"], rec["backend"], rec["model"])] += 1
+                    r = json.loads(line)
+                    if not r.get("error"):
+                        n[(r["scenario_id"], r["prompt_strength"], r["temperature"], r["backend"], r["model"])] += 1
     return n
 
 
+def rate_limit_info(final_answer):
+    t = str(final_answer).lower()
+    if "stopped: llm/api error" not in t or not ("429" in t or "rate limit" in t or "rate_limit" in t):
+        return None
+    return is_daily_limit(t), parse_retry_after(t)
+
+
+def cmd_list(a):
+    sc = load_scenarios()
+    print(f"{'id':5} {'category':20} {'user':8} {'tempting':8} {'split':8} {'tools':5} name")
+    for s in sc:
+        print(f"{s['id']:5} {s['category']:20} {s['acting_user']:8} {str(s.get('tempting', False)):8} "
+              f"{s.get('split', 'known'):8} {len(menu_names(s['menu'])):<5} {s['name']}")
+    print(f"\n{len(sc)} scenarios. Categories: {dict(Counter(s['category'] for s in sc))}")
+
+
+def cmd_single(a):
+    sc = select_scenarios(a.scenario, load_scenarios())[0]
+    rows, summ = run_one(sc, a.backend, a.model, a.temperature, a.prompt, a.seed,
+                         a.api_key or os.environ.get("GROQ_API_KEY"), Budgets(a.token_budget, a.max_steps))
+    print(f"{sc['id']} {sc['name']}  [{sc['category']}]  user={sc['acting_user']}  prompt={a.prompt}  backend={a.backend}")
+    print(f"TASK: {sc['task']}\n")
+    for r in rows:
+        flag = ""
+        if r.get("flow") and r["flow"]["ok"] is False:
+            flag = "  !! FLOW"
+        print(f"{r['step']:>2}. {r['tool']}({json.dumps(r['args'])[:110]}) -> {json.dumps(r['result'])[:100]}{flag}")
+    print(f"\nfinal answer: {summ['final_answer']}")
+    print(f"task_success={summ['task_success']}  stop={summ['stop_reason']}  steps={summ['steps']}  tokens={summ['tokens']}")
+    print("state diff:", summ["state_diff"])
+    if a.out:
+        with open(a.out, "w", encoding="utf-8") as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + "\n")
+        print("rows written to", a.out)
+
+
 def cmd_run(a):
-    tasks = list(TASKS) if a.tasks == "all" else a.tasks.split(",")
-    users = ALL_USERS if a.users == "all" else a.users.split(",")
+    scenarios = select_scenarios(a.scenarios, load_scenarios())
+    prompts = a.prompts.split(",")
+    for p in prompts:
+        if p not in STRENGTHS:
+            raise SystemExit(f"Unknown prompt strength {p}; choose from {STRENGTHS}")
     temps = [float(x) for x in a.temperatures.split(",")]
-    for t in tasks:
-        if t not in TASKS:
-            raise SystemExit(f"Unknown task '{t}'. Known: {', '.join(TASKS)}")
     api_key = a.api_key or os.environ.get("GROQ_API_KEY")
     model_name = a.model if a.backend == "groq" else "mock"
-    existing = Counter() if a.no_resume else _count_existing(a.out, model_name)
-    total = len(tasks) * len(users) * len(temps) * a.runs
+    existing = Counter() if a.no_resume else count_existing(a.out, model_name)
+    total = len(scenarios) * len(prompts) * len(temps) * a.repeats
+    budgets = Budgets(a.token_budget, a.max_steps)
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
-    done, skipped, tokens, seed, consecutive_errors = 0, 0, 0, a.seed, 0
+    done = skipped = tokens = consecutive_errors = 0
+    seed = a.seed
     t0 = time.time()
-    with open(a.out, "a", encoding="utf-8") as fh:
-        for task_key in tasks:
-            for user in users:
+    with open(a.out, "a", encoding="utf-8") as rows_fh, open(summary_path(a.out), "a", encoding="utf-8") as sum_fh:
+        for sc in scenarios:
+            for ps in prompts:
                 for temp in temps:
-                    have = existing[(task_key, user, temp, a.backend, model_name)]
-                    skipped += min(have, a.runs)
-                    for _ in range(max(0, a.runs - have)):
+                    have = existing[(sc["id"], ps, temp, a.backend, model_name)]
+                    skipped += min(have, a.repeats)
+                    for _ in range(max(0, a.repeats - have)):
                         ok = False
                         for attempt in range(6):
-                            rec = run_one(task_key, TASKS[task_key]["task"], user, a.backend, a.model, temp,
-                                          seed, api_key, a.max_steps)
-                            if not rec["error"]:
+                            rows, summ = run_one(sc, a.backend, a.model, temp, ps, seed, api_key, budgets)
+                            if not summ["error"]:
                                 ok, consecutive_errors = True, 0
                                 break
-                            rl = rate_limit_info(rec["final_answer"])
-                            if rl:                      # quota problem: wait or stop, never save as a run
+                            rl = rate_limit_info(summ["final_answer"])
+                            if rl:                          # quota problem: wait or stop; never save as a run
                                 daily, wait = rl
                                 wait = wait if wait is not None else 60
                                 if (daily and wait > a.max_wait) or attempt == 5:
-                                    print(f"\nSTOPPING: {'daily ' if daily else ''}rate limit, Groq says retry in ~{wait/60:.1f} min. "
-                                          f"{done} new runs saved to {a.out}. Run the same command later to resume.")
+                                    print(f"\nSTOPPING: {'daily ' if daily else ''}rate limit, retry in ~{wait / 60:.1f} min. "
+                                          f"{done} new runs saved. Run the same command later to resume.")
                                     return
-                                print(f"Rate limit hit ({'daily token' if daily else 'per-minute'}); waiting {wait + 5:.0f}s then retrying...", flush=True)
+                                print(f"Rate limit ({'daily' if daily else 'per-minute'}); waiting {wait + 5:.0f}s...", flush=True)
                                 time.sleep(wait + 5)
                                 continue
-                            # network / API failure: keep a note in <out>.errors, back off, try a fresh run
                             with open(a.out + ".errors", "a", encoding="utf-8") as ef:
-                                ef.write(json.dumps(rec) + "\n")
+                                ef.write(json.dumps(summ, default=str) + "\n")
                             consecutive_errors += 1
-                            print(f"API/network error ({rec['final_answer'][:400]}) - attempt {attempt + 1}", flush=True)
+                            print(f"API/network error ({summ['final_answer'][:300]}) - attempt {attempt + 1}", flush=True)
                             if consecutive_errors >= a.max_consecutive_errors:
-                                print(f"\nSTOPPING after {consecutive_errors} consecutive errors (check your internet/VPN/proxy and the Groq status). "
-                                      f"{done} new runs saved to {a.out}. Run the same command to resume.")
+                                print(f"\nSTOPPING after {consecutive_errors} consecutive errors. {done} new runs saved. Run again to resume.")
                                 return
                             time.sleep(5 * (attempt + 1))
                         if not ok:
                             continue
-                        fh.write(json.dumps(rec) + "\n")
-                        fh.flush()
+                        for r in rows:                      # rows first, then the summary: a run counts only once its summary exists
+                            rows_fh.write(json.dumps(r) + "\n")
+                        rows_fh.flush()
+                        sum_fh.write(json.dumps(summ, default=str) + "\n")
+                        sum_fh.flush()
                         seed += 1
                         done += 1
-                        tokens += rec.get("tokens", 0)
-                        if done % 5 == 0 or done + skipped == total:
-                            print(f"[{done + skipped}/{total}] new={done} resumed-skip={skipped} tokens_used={tokens} "
+                        tokens += summ["tokens"]
+                        if done % 10 == 0 or done + skipped == total:
+                            print(f"[{done + skipped}/{total}] new={done} skipped={skipped} tokens={tokens} "
                                   f"({tokens / max(done, 1):.0f}/run) {time.time() - t0:.0f}s", flush=True)
                         if a.sleep:
                             time.sleep(a.sleep)
-    print(f"Done. {done} new runs, {skipped} already present. Wrote to {a.out}")
+    print(f"Done. {done} new runs, {skipped} already present.\n  rows:    {a.out}\n  summary: {summary_path(a.out)}")
 
 
-def cmd_relabel(a):
-    n = 0
-    with open(a.inp, encoding="utf-8") as fin, open(a.out, "w", encoding="utf-8") as fout:
-        for line in fin:
-            if not line.strip():
-                continue
-            rec = json.loads(line)
-            hist = rec["steps"]
-            ev = evaluate(hist, rec["acting_user"])
-            ev["task_success"] = rec.get("task_success")   # needs final state; keep stored value
-            rec.update(ev)
-            rec["labeller_version"] = LABELLER_VERSION
-            fout.write(json.dumps(rec) + "\n")
-            n += 1
-    print(f"Relabelled {n} runs -> {a.out} (task_success kept from original run)")
+def cmd_summary(a):
+    sp = summary_path(a.data) if not a.data.endswith("_summary.jsonl") else a.data
+    recs = [json.loads(l) for l in open(sp, encoding="utf-8") if l.strip()]
+    if not recs:
+        print("no runs")
+        return
+    print(f"{len(recs)} runs  |  sources: {dict(Counter(r['source'] for r in recs))}")
+    print(f"task success: {sum(bool(r['task_success']) for r in recs) / len(recs):.1%}   "
+          f"refused: {sum(r['refused'] for r in recs) / len(recs):.1%}   "
+          f"mean steps: {sum(r['steps'] for r in recs) / len(recs):.1f}   mean tokens: {sum(r['tokens'] for r in recs) / len(recs):.0f}")
+    print("stop reasons:", dict(Counter(r["stop_reason"] for r in recs)))
+    by = defaultdict(list)
+    for r in recs:
+        by[r["prompt_strength"]].append(r)
+    print("\nby prompt strength (outgoing flow flags are a quick preview, not the Stage 4 label):")
+    for k in sorted(by):
+        g = by[k]
+        print(f"  {k}: runs={len(g):4d}  success={sum(bool(r['task_success']) for r in g) / len(g):.0%}  "
+              f"runs with a flagged outgoing flow={sum(r['outgoing_flow_flags'] > 0 for r in g) / len(g):.0%}  "
+              f"distinct tool paths={len({tuple(r['tools']) for r in g})}")
+    print("\nby category:")
+    cat = defaultdict(list)
+    for r in recs:
+        cat[r["category"]].append(r)
+    for k in sorted(cat):
+        g = cat[k]
+        print(f"  {k:20} runs={len(g):4d}  success={sum(bool(r['task_success']) for r in g) / len(g):.0%}  "
+              f"flagged flows={sum(r['outgoing_flow_flags'] > 0 for r in g) / len(g):.0%}")
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-    r = sub.add_parser("run", help="generate trajectories")
-    r.add_argument("--backend", choices=["mock", "groq"], default="mock")
-    r.add_argument("--model", default="openai/gpt-oss-20b")
-    r.add_argument("--api-key", default=None)
-    r.add_argument("--tasks", default="all", help="comma list of task keys, or 'all'")
-    r.add_argument("--users", default="all", help="comma list of users, or 'all'")
+    ls = sub.add_parser("list", help="list scenarios")
+    ls.add_argument("--scenario-file", default=None)
+    ls.set_defaults(fn=cmd_list)
+
+    def common(x):
+        x.add_argument("--scenario-file", default=None, help="use another scenario file, e.g. data/scenarios_generated.json")
+        x.add_argument("--backend", choices=["mock", "groq"], default="mock")
+        x.add_argument("--model", default="openai/gpt-oss-20b")
+        x.add_argument("--api-key", default=None)
+        x.add_argument("--seed", type=int, default=1000)
+        x.add_argument("--token-budget", type=int, default=60000, help="stop a run after this many LLM tokens")
+        x.add_argument("--max-steps", type=int, default=60, help="safety valve against endless loops")
+
+    s = sub.add_parser("single", help="run one scenario and print the trajectory")
+    s.add_argument("--scenario", required=True)
+    s.add_argument("--prompt", default="p1", choices=list(STRENGTHS))
+    s.add_argument("--temperature", type=float, default=1.0)
+    s.add_argument("--out", default=None)
+    common(s)
+    s.set_defaults(fn=cmd_single)
+
+    r = sub.add_parser("run", help="run a grid of scenarios and save the data")
+    r.add_argument("--scenarios", default="all", help="all | S01,S02 | category:vendor | split:known | tempting")
+    r.add_argument("--prompts", default="p0,p1,p2")
     r.add_argument("--temperatures", default="1.0")
-    r.add_argument("--runs", type=int, default=10, help="repeats per (task,user,temperature)")
-    r.add_argument("--seed", type=int, default=1000)
-    r.add_argument("--max-steps", type=int, default=20, help="step cap per run (core default is 12)")
-    r.add_argument("--sleep", type=float, default=0.0, help="seconds between runs (rate limits)")
-    r.add_argument("--max-wait", type=float, default=900, help="on a rate limit, wait up to this many seconds, else stop (resume later)")
-    r.add_argument("--max-consecutive-errors", type=int, default=4, help="stop after this many API/network failures in a row")
-    r.add_argument("--no-resume", action="store_true", help="ignore runs already in --out (default: top up to --runs per cell)")
-    r.add_argument("--out", default="data/trajectories.jsonl")
+    r.add_argument("--repeats", type=int, default=3)
+    r.add_argument("--sleep", type=float, default=0.0)
+    r.add_argument("--max-wait", type=float, default=900)
+    r.add_argument("--max-consecutive-errors", type=int, default=4)
+    r.add_argument("--no-resume", action="store_true")
+    r.add_argument("--out", default="data/runs/trajectories.jsonl")
+    common(r)
     r.set_defaults(fn=cmd_run)
-    l = sub.add_parser("relabel", help="recompute labels from stored trajectories")
-    l.add_argument("--in", dest="inp", required=True)
-    l.add_argument("--out", required=True)
-    l.set_defaults(fn=cmd_relabel)
+
+    m = sub.add_parser("summary", help="quick statistics of a saved dataset")
+    m.add_argument("--data", required=True)
+    m.set_defaults(fn=cmd_summary)
     a = p.parse_args()
+    SCENARIO_OVERRIDE["path"] = getattr(a, "scenario_file", None)
     a.fn(a)
 
 
