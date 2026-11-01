@@ -208,7 +208,8 @@ def test_daily_limit_is_not_retried():
 
 
 def test_runner_resumes_and_skips_existing(tmp_path):
-    import argparse, json, runner
+    import argparse, json
+    import runner_phase2 as runner
     out = str(tmp_path / "r.jsonl")
     ns = lambda runs: argparse.Namespace(backend="mock", model="x", api_key=None, tasks="project_report", users="Admin",
                                          temperatures="1.0", runs=runs, seed=1, max_steps=20, sleep=0, max_wait=900,
@@ -248,7 +249,8 @@ def test_connection_errors_are_retried():
 
 
 def test_runner_stops_after_consecutive_network_errors_and_keeps_main_file_clean(tmp_path):
-    import argparse, runner
+    import argparse
+    import runner_phase2 as runner
     out = str(tmp_path / "e.jsonl")
     real = runner.run_one
     runner.run_one = lambda *a, **k: dict(real(*a, **k), error=True, final_answer="Stopped: LLM/API error - Connection error.")

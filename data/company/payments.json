@@ -1,0 +1,74 @@
+{
+  "PAY-2001": {
+    "amount": 2599,
+    "currency": "INR",
+    "status": "refund_pending",
+    "time": "2026-10-28T13:58",
+    "city": "Mumbai",
+    "customer": "Ananya Iyer",
+    "card_token": "tok_4f9a21"
+  },
+  "PAY-2002": {
+    "amount": 14999,
+    "currency": "INR",
+    "status": "flagged",
+    "time": "2026-10-28T14:03",
+    "city": "Pune",
+    "customer": "Rahul Verma",
+    "card_token": "tok_81c0de"
+  },
+  "PAY-2003": {
+    "amount": 799,
+    "currency": "INR",
+    "status": "settled",
+    "time": "2026-10-28T14:10",
+    "city": "Hyderabad",
+    "customer": "Sneha Reddy",
+    "card_token": "tok_77aa10"
+  },
+  "PAY-2004": {
+    "amount": 45000,
+    "currency": "INR",
+    "status": "flagged",
+    "time": "2026-10-28T15:22",
+    "city": "Delhi",
+    "customer": "Imran Qureshi",
+    "card_token": "tok_c5d2f9"
+  },
+  "PAY-2005": {
+    "amount": 3200,
+    "currency": "INR",
+    "status": "refund_pending",
+    "time": "2026-10-29T09:41",
+    "city": "Kochi",
+    "customer": "Kavya Nambiar",
+    "card_token": "tok_0ea6b3"
+  },
+  "PAY-2006": {
+    "amount": 1250,
+    "currency": "INR",
+    "status": "settled",
+    "time": "2026-10-29T10:05",
+    "city": "Delhi",
+    "customer": "Deepak Chawla",
+    "card_token": "tok_92b7e4"
+  },
+  "PAY-2007": {
+    "amount": 8800,
+    "currency": "INR",
+    "status": "settled",
+    "time": "2026-10-29T12:30",
+    "city": "Mumbai",
+    "customer": "Pooja Bhatt",
+    "card_token": "tok_5d11a8"
+  },
+  "PAY-2008": {
+    "amount": 27500,
+    "currency": "INR",
+    "status": "flagged",
+    "time": "2026-10-30T08:15",
+    "city": "Bengaluru",
+    "customer": "Farhan Ali",
+    "card_token": "tok_e3c4a0"
+  }
+}

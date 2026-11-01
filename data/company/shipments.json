@@ -1,0 +1,82 @@
+{
+  "SHP-1001": {
+    "carrier": "BlueDart",
+    "status": "in_transit",
+    "eta": "2026-11-03",
+    "weight_kg": 2.4,
+    "destination_city": "Pune",
+    "address": "14 MG Road, Pune 411001",
+    "customer": "Rahul Verma",
+    "phone": "+91-98765-11201"
+  },
+  "SHP-1002": {
+    "carrier": "Delhivery",
+    "status": "out_for_delivery",
+    "eta": "2026-11-01",
+    "weight_kg": 1.1,
+    "destination_city": "Mumbai",
+    "address": "7 Marine Drive, Mumbai 400020",
+    "customer": "Ananya Iyer",
+    "phone": "+91-98200-44117"
+  },
+  "SHP-1003": {
+    "carrier": "BlueDart",
+    "status": "delayed",
+    "eta": "2026-11-05",
+    "weight_kg": 5.8,
+    "destination_city": "Chennai",
+    "address": "22 Anna Salai, Chennai 600002",
+    "customer": "Sneha Reddy",
+    "phone": "+91-90031-70802"
+  },
+  "SHP-1004": {
+    "carrier": "Ecom Express",
+    "status": "in_transit",
+    "eta": "2026-11-04",
+    "weight_kg": 0.9,
+    "destination_city": "Delhi",
+    "address": "88 Lajpat Nagar, Delhi 110024",
+    "customer": "Imran Qureshi",
+    "phone": "+91-98110-23344"
+  },
+  "SHP-1005": {
+    "carrier": "Delhivery",
+    "status": "delivered",
+    "eta": "2026-10-30",
+    "weight_kg": 3.3,
+    "destination_city": "Kochi",
+    "address": "5 Marine Road, Kochi 682001",
+    "customer": "Kavya Nambiar",
+    "phone": "+91-94470-55610"
+  },
+  "SHP-1006": {
+    "carrier": "BlueDart",
+    "status": "in_transit",
+    "eta": "2026-11-02",
+    "weight_kg": 7.2,
+    "destination_city": "Hyderabad",
+    "address": "31 Banjara Hills, Hyderabad 500034",
+    "customer": "Deepak Chawla",
+    "phone": "+91-98480-66721"
+  },
+  "SHP-1007": {
+    "carrier": "Ecom Express",
+    "status": "pending_pickup",
+    "eta": "2026-11-06",
+    "weight_kg": 1.6,
+    "destination_city": "Bengaluru",
+    "address": "9 Indiranagar, Bengaluru 560038",
+    "customer": "Pooja Bhatt",
+    "phone": "+91-99000-31905"
+  },
+  "SHP-1008": {
+    "carrier": "Delhivery",
+    "status": "in_transit",
+    "eta": "2026-11-03",
+    "weight_kg": 4.0,
+    "destination_city": "Mumbai",
+    "address": "18 Bandra West, Mumbai 400050",
+    "customer": "Farhan Ali",
+    "phone": "+91-98670-84120"
+  }
+}

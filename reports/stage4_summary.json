@@ -1,0 +1,184 @@
+{
+  "environment": {
+    "scenarios": 64,
+    "teams": 7,
+    "users": 24,
+    "tools": 30,
+    "agent_roles": [
+      "assistant",
+      "orchestrator",
+      "payments_agent",
+      "shipping_agent",
+      "hr_agent",
+      "risk_agent",
+      "platform_agent",
+      "vendor_agent",
+      "notifier",
+      "approver"
+    ],
+    "rules": 18,
+    "known/diverse/unseen scenarios": {
+      "known": 46,
+      "diverse": 3,
+      "unseen": 15
+    }
+  },
+  "runs": {
+    "total": 1695,
+    "by_source": {
+      "mock": 1695
+    },
+    "note": "mock = scripted offline agent (tests the pipeline); groq = real LLM. They must never be mixed in conclusions.",
+    "distinct_trajectories": 264
+  },
+  "label_distribution": {
+    "DECLINED": 311,
+    "SAFE": 781,
+    "SAFE_VARIANT": 30,
+    "UNSAFE_OUTCOME": 503,
+    "UNSAFE_PROCEDURAL": 70
+  },
+  "label_distribution_by_source": {
+    "mock": {
+      "SAFE": 781,
+      "UNSAFE_OUTCOME": 503,
+      "DECLINED": 311,
+      "UNSAFE_PROCEDURAL": 70,
+      "SAFE_VARIANT": 30
+    }
+  },
+  "label_distribution_by_split": {
+    "diverse": {
+      "UNSAFE_OUTCOME": 60,
+      "DECLINED": 20,
+      "SAFE": 9,
+      "SAFE_VARIANT": 1
+    },
+    "known": {
+      "SAFE": 762,
+      "UNSAFE_OUTCOME": 332,
+      "DECLINED": 200,
+      "UNSAFE_PROCEDURAL": 70,
+      "SAFE_VARIANT": 16
+    },
+    "unseen": {
+      "UNSAFE_OUTCOME": 111,
+      "DECLINED": 91,
+      "SAFE": 10,
+      "SAFE_VARIANT": 13
+    }
+  },
+  "unsafe_rate": 0.3381,
+  "unsafe_but_successful_rate": 0.3357,
+  "unsafe_but_successful_share_of_unsafe": 0.993,
+  "task_success_rate": 0.8142,
+  "violations_per_rule": {
+    "R2": 91,
+    "R3": 91,
+    "R4": 81,
+    "R5": 28,
+    "R6": 7,
+    "R7": 105,
+    "R8": 4,
+    "R9": 28,
+    "R10": 70,
+    "R11": 114,
+    "R12": 23,
+    "R13": 247,
+    "R14": 28,
+    "R15": 25,
+    "R16": 72,
+    "R17": 58,
+    "R18": 3
+  },
+  "runs_with_violation_per_team": {
+    "Shipping": 208,
+    "Platform": 84,
+    "HR": 35,
+    "Payments": 146,
+    "Risk": 100
+  },
+  "violations_per_agent": {
+    "assistant": 889,
+    "hr_agent": 37,
+    "payments_agent": 35,
+    "orchestrator": 19,
+    "shipping_agent": 60,
+    "notifier": 20,
+    "platform_agent": 15
+  },
+  "delegation_depth": {
+    "0": 1353,
+    "1": 342
+  },
+  "event_chain_depth": {
+    "0": 1637,
+    "1": 58
+  },
+  "time_to_first_violation": {
+    "mean_step": 2.61,
+    "mean_sim_minutes": 7.7
+  },
+  "unsafe_rate_by_prompt_strength": {
+    "p0": {
+      "runs": 565,
+      "unsafe_rate": 0.4761,
+      "outcome_rate": 0.4124,
+      "declined_rate": 0.085,
+      "task_success_rate": 0.9115,
+      "mean_path_entropy_bits": 0.915
+    },
+    "p1": {
+      "runs": 565,
+      "unsafe_rate": 0.3504,
+      "outcome_rate": 0.3115,
+      "declined_rate": 0.1646,
+      "task_success_rate": 0.8319,
+      "mean_path_entropy_bits": 1.101
+    },
+    "p2": {
+      "runs": 565,
+      "unsafe_rate": 0.1876,
+      "outcome_rate": 0.1664,
+      "declined_rate": 0.3009,
+      "task_success_rate": 0.6991,
+      "mean_path_entropy_bits": 0.876
+    }
+  },
+  "mean_path_entropy_bits": 1.247,
+  "tokens": {
+    "total": 0,
+    "mean_per_run": 0.0
+  },
+  "mean_run_seconds": 0.0023,
+  "risk_patterns": {
+    "count": 44,
+    "coverage_by_split": {
+      "known": {
+        "unsafe_runs": 402,
+        "matched": 399,
+        "coverage": 0.9925
+      },
+      "diverse": {
+        "unsafe_runs": 60,
+        "matched": 40,
+        "coverage": 0.6667
+      },
+      "unseen": {
+        "unsafe_runs": 111,
+        "matched": 78,
+        "coverage": 0.7027
+      }
+    }
+  },
+  "model_fingerprint": "not computed: needs real runs from at least two different models",
+  "taxonomy_run_counts": {
+    "unauthorised_access": 203,
+    "data_leakage": 285,
+    "procedure_violation": 280,
+    "identity_and_delegation": 26,
+    "prompt_injection": 60,
+    "temporary_access": 25,
+    "advisory": 0
+  }
+}
