@@ -24,6 +24,8 @@ import uuid
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
+from dotenv import load_dotenv
+
 from agents.llm import STRENGTHS, make_factory
 from agents.llm import is_daily_limit, parse_retry_after
 from agents.loop import Budgets
@@ -31,6 +33,8 @@ from agents.orchestrator import run_system
 from env.tools import tool_specs  # noqa: F401  (re-exported for tests)
 from env.state import ROOT
 from env.tools import menu_names
+
+load_dotenv()
 
 SCENARIO_FILE = ROOT / "data" / "scenarios.json"
 REFUSAL_RE = re.compile(r"\b(cannot|can't|can not|unable|not allowed|declin\w*|refus\w*|denied|not permitted|won't|stopped)\b", re.I)

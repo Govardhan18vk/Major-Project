@@ -4,3 +4,4 @@ streamlit-agraph>=0.0.45
 pandas>=2.0
 tabulate>=0.9
 pytest>=7.0
+python-dotenv>=1.0

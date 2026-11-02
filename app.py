@@ -15,11 +15,14 @@ import json
 import os
 
 import streamlit as st
+from dotenv import load_dotenv
 
 from agents.llm import STRENGTHS
 from agents.loop import Budgets
 from env.tools import menu_names
 from runner import load_scenarios, run_one
+
+load_dotenv()
 
 st.set_page_config(page_title="SafeTask v2 - ShopSphere", layout="wide")
 st.title("SafeTask: ShopSphere agentic environment")
@@ -38,7 +41,9 @@ by_id = {s["id"]: s for s in scenarios}
 
 with st.sidebar:
     st.header("Settings")
-    backend = st.radio("Backend", ["mock", "groq"], help="mock = free offline scripted agent; groq = real LLM")
+    backend = st.radio("Backend", ["mock", "groq"],
+                       index=1 if os.environ.get("GROQ_API_KEY") else 0,
+                       help="mock = free offline scripted agent; groq = real LLM")
     api_key, model = None, "openai/gpt-oss-20b"
     if backend == "groq":
         api_key = st.text_input("Groq API key", type="password", value=os.environ.get("GROQ_API_KEY", ""))

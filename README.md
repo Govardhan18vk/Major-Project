@@ -79,7 +79,20 @@ python runner.py run --scenarios all --prompts p0,p1,p2 --temperatures 0.7,1.2 -
 python runner.py summary --data data/runs/mock.jsonl
 ```
 
-**8. Use a real LLM (Groq, free key from console.groq.com).** Set the key for this PowerShell window only:
+**8. Use a real LLM (Groq, free key from console.groq.com).** On macOS/Linux, create a local `.env` file in the project folder:
+
+```bash
+printf 'GROQ_API_KEY=your-key-here\n' > .env
+```
+
+The `.env` file is ignored by Git and must never be committed. Then run:
+
+```bash
+source .venv/bin/activate
+streamlit run app.py
+```
+
+The app will select **groq** automatically when the key is present. You can also set the key only for the current terminal:
 
 ```powershell
 $env:GROQ_API_KEY = "paste-your-key-here"
