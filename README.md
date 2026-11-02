@@ -55,7 +55,7 @@ python -m env.check_company
 python -m pytest tests -q
 ```
 
-Expected: `company: 7 teams, 24 users, 5 repos, 13 documents ... tools: 30`, `scenarios: 49`, and `211 passed`.
+Expected: `company: 7 teams, 24 users, 5 repos, 13 documents ... tools: 30`, `scenarios: 49`, and all tests passing.
 
 **5. Try one scenario with the free offline agent** (no API key):
 
@@ -134,7 +134,6 @@ Scenario selectors for `--scenarios`: `all`, `S01,S09`, `category:not_allowed`, 
 Use `--scenario-file data/scenarios_generated.json` with `list`, `single` or `run` to use the attacker's scenarios.
 Other options: `--temperatures 0.7,1.2`, `--seed`, `--token-budget 60000`, `--max-steps 60`, `--no-resume`.
 
-Older Phase 2 tools still work on the old 11-tool data (their original README is `docs/README_phase2.md`): `streamlit run app_basic.py`, `streamlit run flows.py`, `python runner_phase2.py run ...`, `python analysis.py ...`, `streamlit run analysis_app.py`.
 
 ---
 
@@ -413,11 +412,10 @@ The matching summary line has `task_success`, `state_diff` (for example `commit:
 | Library | Used for |
 |---|---|
 | `openai` | The OpenAI-compatible client, pointed at Groq's URL. No OpenAI key is needed |
-| `streamlit` | The web UI (`app.py`, plus the old `app_basic.py`, `analysis_app.py`) |
-| `pandas` | Tables in the Phase 2 analysis |
-| `tabulate` | Printing tables in the Phase 2 analysis |
-| `pytest` | The 211 tests |
-| `streamlit-agraph` | Optional: only for the old `flows.py` graph view |
+| `streamlit` | The web UI (`app.py` and `app_analysis.py`) |
+| `pandas` | Tables in the Objective 2 analysis |
+| `tabulate` | Printing report tables |
+| `pytest` | The project test suite |
 | Standard library | `json` (data and rows), `argparse` (CLI), `random` (seeded mock), `re` (recipient, secret and refusal matching), `time` (timings), `dataclasses` (tool and budget definitions), `pathlib` (paths), `datetime` (simulated clock), `uuid` (run ids), `collections` (counting), `subprocess` (CLI tests) |
 
 Nothing else is needed. All data is plain JSON, so there is no database to install.
@@ -426,7 +424,7 @@ Nothing else is needed. All data is plain JSON, so there is no database to insta
 
 ## 5. Tests
 
-`python -m pytest tests -q` runs 211 tests (the original Phase 2 tests, Stages 1 and 2, and `tests/test_stage3.py`):
+`python -m pytest tests -q` runs the project test suite covering the environment, runner, multi-agent flows, and Objective 2:
 
 - company data is consistent; access levels for 17 representative cases; temporary access expiry;
 - every tool spec is valid; open mode never blocks; leave, merge, events, recipient classification;
@@ -444,7 +442,7 @@ The Streamlit app was also smoke-tested: every scenario page renders and a run c
 
 ## 6. Honest limitations
 
-- **Labels come from rules, not from humans, until you validate them.** The rules are checked against a hand-labelled gold set (`stage4.py gold-sample` / `gold-validate`); that step is yours. The old Phase 2 labeller (`safety_rules.py`) still only fits the old 11-tool data.
+- **Labels come from rules, not from humans, until you validate them.** The rules are checked against a hand-labelled gold set (`stage4.py gold-sample` / `gold-validate`); that step is yours.
 - **Mock labels are about the pipeline.** The 1,695 shipped runs come from scripted agents, and the scenarios were written together with the rules, so rule coverage there is flattering (the critic finds nothing). Real Groq runs will show the true gaps.
 - **Mock is not an LLM.** Use it to test the pipeline. Real findings need Groq runs, and the free-tier limits make a large real dataset a multi-day job.
 - **Flow tracking is a heuristic.** It matches known markers (salary values, names, tokens, secret patterns) and attachments. A paraphrase with no marker would be missed, and a coincidental match could over-flag. Stage 4 decides on the fine flow only.

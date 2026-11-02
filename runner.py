@@ -13,7 +13,7 @@ Examples
   python runner.py run --scenarios S09,S15,S22 --prompts p1 --repeats 2 --backend groq --sleep 2 --out data/runs/groq.jsonl
   python runner.py summary --data data/runs/mock.jsonl
 
-The old Phase 2 runner is kept as runner_phase2.py (it drives the old 11-tool core.py).
+This runner drives the current 30-tool environment and supports both mock and Groq backends.
 """
 import argparse
 import json

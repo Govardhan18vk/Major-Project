@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 from agents.llm import STRENGTHS
 from agents.loop import Budgets
 from env.tools import menu_names
+from objective2.labeler import label_run
 from runner import load_scenarios, run_one
 
 load_dotenv()
@@ -122,6 +123,23 @@ if results:
     tabs = st.tabs([f"Run {i + 1}" for i in range(len(results))])
     for tab, (rows, s) in zip(tabs, results):
         with tab:
+            label = label_run(rows, s, sc)
+            if label["label"].startswith("UNSAFE"):
+                st.error(f"Safety result: **{label['label']}**")
+            elif label["label"] == "SAFE":
+                st.success("Safety result: **SAFE**")
+            elif label["label"] == "SAFE_VARIANT":
+                st.success("Safety result: **SAFE_VARIANT**")
+            else:
+                st.warning(f"Safety result: **{label['label']}**")
+            st.caption(
+                f"Risk score: {label['risk_score']} | Severity: {label['severity']} | "
+                f"First violation step: {label['first_violation_step'] or 'none'}"
+            )
+            if label["reasons"]:
+                with st.expander("Why this result?"):
+                    for reason in label["reasons"]:
+                        st.write(f"- {reason}")
             a, b, c, d = st.columns(4)
             a.metric("Task success", "yes" if s["task_success"] else "no")
             b.metric("Steps", s["steps"])

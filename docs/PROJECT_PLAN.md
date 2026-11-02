@@ -3,7 +3,7 @@
 > - **Tools:** 30 (Stage 3 added `get_team_members`, `get_repo_collaborators`, `run_ci`, `decide_approval` and made `delegate` real), not about 22. `authenticate`, `audit_log` and `check_recipient`-style rules from Phase 2 are re-expressed in Stage 4; the State keeps its own change log instead of an `audit_log` tool.
 > - **Teams:** the six operating teams plus a small Executive group (CEO and CFO) so finance-reporting and "fake CEO" scenarios have real people. 24 users.
 > - **Menus:** scenarios carry an explicit tool menu of 5 to 9 tools; the role menus (`MENUS` in `env/tools.py`) are used by the Stage 3 team agents, notifier and approver.
-> - **Status:** Stages 1, 2 and 3 are implemented and tested (49 scenarios, 211 tests). Stage 4 as built: `objective2/` (rules, labeller, procedural, patterns, critic, gold, reports), `stage4.py` CLI, `app_analysis.py`; R1 is an advisory; the gold set needs human labels. See README section 2c. Stage 3 as built: orchestrator and six team agents, `authorized` vs `agent_authorized`, event notifier with depth-capped cascades, approver agent, injection through delegation, and a template-based attacker (`agents/attacker.py`) writing `unseen` scenarios. See README section 2b for diagrams and commands.
+> - **Status:** Stages 1, 2 and 3 are implemented and tested. Stage 4 as built: `objective2/` (rules, labeller, procedural, patterns, critic, gold, reports), `stage4.py` CLI, `app_analysis.py`; R1 is an advisory; the gold set needs human labels. See README section 2c. Stage 3 as built: orchestrator and six team agents, `authorized` vs `agent_authorized`, event notifier with depth-capped cascades, approver agent, injection through delegation, and a template-based attacker (`agents/attacker.py`) writing `unseen` scenarios. See README section 2b for diagrams and commands.
 > - **Scenarios:** 49 (36 base from Stages 1-2 plus 13 from Stage 3). 19 are tempting.
 > - **Extra module:** `env/access.py` holds the access-control ground truth that `check_permission` reads and the Stage 4 labeller will reuse.
 > - **Rows:** also carry `resources_read` and `flow` (the raw flow record). The summary file also carries `outgoing_flows` and `outgoing_flow_flags` (a preview, not a label).
@@ -183,12 +183,12 @@ safetask/
     export.py                # handoff files
     report.py                # tables and charts
   app.py                     # Streamlit: run a scenario, see flow
-  analysis_app.py            # Streamlit: dataset dashboard
+  app_analysis.py            # Streamlit: Objective 2 dashboard
   docs/                      # architecture and sequence diagrams
   tests/
 ```
 
-The Phase 2 files (`core.py`, `safety_rules.py`, `scenarios.py`, `runner.py`, `analysis.py`) are reused and split into this layout stage by stage.
+The current implementation uses `env/`, `agents/`, `runner.py`, `objective2/`, and the Stage 4 dashboard.
 
 ---
 
@@ -211,11 +211,8 @@ Rotate any key that was ever pasted into a chat or committed to git.
 
 ```bash
 streamlit run app.py
-streamlit run flows.py
 python runner.py run --backend mock --runs 12 --temperatures 0.5,1.0,1.5 --out data/mock.jsonl
 python runner.py run --backend groq --tasks salary_report,external_sharing --users Bob,Admin --runs 10 --sleep 1 --out data/groq.jsonl
-python analysis.py --data data/groq.jsonl --out reports
-streamlit run analysis_app.py
 python -m pytest tests -q
 ```
 
@@ -243,7 +240,6 @@ python -m analysis.validate --gold data/gold/gold_labels.csv --labels reports/la
 python -m analysis.export --data reports/labels.jsonl --out reports
 python -m analysis.report --data reports/labels.jsonl --out reports
 streamlit run app.py
-streamlit run analysis_app.py
 python -m pytest tests -q
 ```
 
@@ -598,7 +594,7 @@ Class counts; violations per team, per agent and per rule; unsafe-but-successful
 
 ### 4.11 UI (CORE)
 - `app.py`: pick scenario, acting user, backend and prompt strength. Shows the vertical flow with common steps, per-agent lanes for multi-agent runs, the event timeline, the "who received what" table, the goal result, the state diff, the tag flows, and timing.
-- `analysis_app.py`: label distribution, violations per team and agent, pattern catalogue, prompt-strength comparison, gold validation table.
+- `app_analysis.py`: label distribution, violations per team and agent, pattern catalogue, prompt-strength comparison, gold validation table.
 
 ### 4.12 Diagrams and evaluation pack (CORE)
 - **Diagrams in `docs/`:** the high-level architecture; sequence diagrams for a single-agent run, the push-notification flow and multi-agent delegation (section 8, Stage 3 shows the last two); the end-to-end data flow (section 5).
@@ -728,7 +724,6 @@ Check your provider's current model list and limits. Save the model name on ever
 |---|---|
 | `openai` | OpenAI-compatible client, pointed at Groq (no OpenAI key needed) |
 | `streamlit` | The web UI |
-| `streamlit-agraph` | Optional flow graph in `flows.py` |
 | `pandas`, `numpy` | Tables, reports, numeric work |
 | `scipy` | Hierarchical clustering of trajectories (optional) |
 | `tabulate` | Printing tables |
