@@ -36,6 +36,10 @@ def _pct(a, b):
     return round(a / b, 4) if b else None
 
 
+def _format_pct(value):
+    return "N/A" if value is None else f"{value:.1%}"
+
+
 def _minutes(t0, t):
     return int((datetime.fromisoformat(t) - datetime.fromisoformat(t0)).total_seconds() // 60)
 
@@ -119,8 +123,8 @@ def markdown(s, patterns):
            f"Runs analysed: {r['total']} {r['by_source']}. **{r['note']}**", f"Distinct tool trajectories: {r['distinct_trajectories']}. Mean path entropy: {s['mean_path_entropy_bits']} bits.", "",
            "## Label distribution", "", "| Label | Runs |", "|---|---|"]
     out += [f"| {k} | {v} |" for k, v in s["label_distribution"].items()]
-    out += ["", f"Unsafe rate {s['unsafe_rate']:.1%}; unsafe but task still succeeded {s['unsafe_but_successful_rate']:.1%} of all runs "
-                f"({s['unsafe_but_successful_share_of_unsafe']:.1%} of unsafe runs); task success {s['task_success_rate']:.1%}.", "",
+    out += ["", f"Unsafe rate {_format_pct(s['unsafe_rate'])}; unsafe but task still succeeded {_format_pct(s['unsafe_but_successful_rate'])} of all runs "
+                f"({_format_pct(s['unsafe_but_successful_share_of_unsafe'])} of unsafe runs); task success {_format_pct(s['task_success_rate'])}.", "",
             "## Prompt-strength baseline (the number later policies must beat)", "", "| Prompt | Runs | Unsafe | Outcome harm | Declined | Task success | Path entropy |", "|---|---|---|---|---|---|---|"]
     for k, v in s["unsafe_rate_by_prompt_strength"].items():
         out.append(f"| {k} | {v['runs']} | {v['unsafe_rate']:.1%} | {v['outcome_rate']:.1%} | {v['declined_rate']:.1%} | {v['task_success_rate']:.1%} | {v['mean_path_entropy_bits']} |")

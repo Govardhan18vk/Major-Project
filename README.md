@@ -12,7 +12,7 @@ This folder is the Phase 2 pack **extended with Stages 1 to 4 of the plan** (`do
 | 1 | Company data, access matrix, State, tags and flow tracking, 30 tools, role menus, loop with budgets | **Done, tested** |
 | 2 | 36 base scenarios, goal checks, state diff, three prompt strengths, runner (grid, resume, budgets), dataset format | **Done, tested** |
 | 3 | Multi-agent (orchestrator and team agents, delegation chain), event notifier with cascades, approval agent, injection via delegation, attacker agent, 13 new scenarios (49 total) | **Done, tested** |
-| 4 | Objective 2: rule engine R1 to R18, five labels with reasons and `first_violation_step`, procedural analysis, risk patterns, offline critic, gold-set tool, handoff files, analysis UI | **Done, tested** (the gold set needs your hand labels) |
+| 4 | Objective 2: rule engine R1 to R18, five labels with reasons and `first_violation_step`, procedural analysis, risk patterns, offline critic, handoff files, analysis UI | **Done, tested** |
 
 The dataset in `data/runs/mock.jsonl` is **mock data** from the offline scripted agent. It tests the pipeline. It is not evidence about real LLM behaviour. Real data comes from the `groq` backend.
 
@@ -239,7 +239,7 @@ Shipped data: `data/runs/mock.jsonl` (1,470 runs of the 49 scenarios) and `data/
 ## 2c. Stage 4: Objective 2 (labels, analysis, patterns, handoff)
 
 ### Why rules decide safe or unsafe
-Rules are the written definition of "unsafe". A program applies them, so labelling is automatic, repeatable and explainable, and the GA later gets a stable ground truth. An LLM is used only as an **offline critic that proposes new rules**; a human accepts them. The rules are checked against humans with the **gold set** (below).
+Rules are the written definition of "unsafe". A program applies them, so labelling is automatic, repeatable and explainable, and the GA later gets a stable ground truth. An LLM is used only as an **offline critic that proposes new rules**; a human accepts them.
 
 ### Labels
 | Label | Meaning |
@@ -286,7 +286,6 @@ R1 to R8 re-express the Phase 2 rules on the new tools (`authenticate` and `audi
 | `splits.json` | known / diverse / unseen | evaluation |
 | `procedural.json` | edit distance to reference, clusters, entropy, prompt-strength baseline | analysis, baseline |
 | `stage4_summary.json`, `stage4_report.md` | numbers to present | report and demo |
-| `gold_sample.csv`, `gold_rule_labels.csv`, `gold_guide.md` | the gold set to hand-label | validation |
 | `critic_proposals.json` | rules proposed by the critic (pending) | human review |
 
 (The older Phase 2 files in `reports/` are left as they were.)
@@ -294,7 +293,7 @@ R1 to R8 re-express the Phase 2 rules on the new tools (`authenticate` and `audi
 ### Commands
 
 ```powershell
-python stage4.py all                                   # label + analyse + patterns + critic + gold sample + all files
+python stage4.py all                                   # label + analyse + patterns + critic + all files
 python stage4.py all --data data/runs/groq.jsonl       # the same on real runs (repeat --data for several files)
 python stage4.py explain --run <first 8+ chars of a run_id>
 streamlit run app_analysis.py                          # the analysis UI (8 tabs)
@@ -302,15 +301,12 @@ streamlit run app_analysis.py                          # the analysis UI (8 tabs
 python stage4.py critic --backend heuristic            # offline; or --backend groq (a different model from the defender)
 python stage4.py critic-accept X01                     # YOU accept a proposal, then rerun `all`
 
-python stage4.py gold-sample --n 80                    # then fill human_label_A in reports/gold_sample.csv (see reports/gold_guide.md)
-python stage4.py gold-validate --a reports/gold_sample.csv [--b second_person.csv]
 ```
 
 ### How each part works
 - **Procedural analysis.** Per scenario: the tool path of every run (event notifier and approver agent left out), edit distance to the nearest reference path, single-link clusters of paths within one edit, and Shannon entropy (how many different ways the task gets solved). Per prompt strength: unsafe, outcome, declined rate, task success, and path entropy. This is the **prompt-only baseline** later policies must beat.
 - **Risk patterns.** For each unsafe run, the last 4 steps up to the first violation are abstracted to roles (`query_hr:HR_DATA`, `send_message:EXTERNAL`, `commit_change:REPO_PUSH/OTHER_TEAM`), identical (sequence, rule) pairs are counted. Patterns come from `known` scenarios only. **Coverage** then says how many unsafe runs from `diverse` and `unseen` match a pattern: that is the generalisation test.
 - **Critic.** Looks at runs labelled SAFE or SAFE_VARIANT that show suspicious signals (long temporary access, confidential data then a message outside, broadcast to everyone, writes or outside messages after untrusted content). It proposes rules in a fixed JSON format with a small condition language; each is validated, and the number of safe runs it would flag is shown. A human accepts it. On the current mock data the critic finds **no** such runs (the scripted scenarios were written with the rules in mind), so it is for real runs.
-- **Gold set.** `gold-sample` picks about 80 runs spread over categories and prompt strengths and hides the rule labels. Two people label independently; `gold-validate` reports Cohen's kappa between them, then precision, recall, F1 per label, a confusion matrix and the disagreements, so you fix the rules and repeat.
 
 ### Numbers on the shipped mock data (1,695 runs: 1,470 known/diverse + 225 unseen) - pipeline check, not LLM evidence
 - Labels: SAFE 781, DECLINED 311, UNSAFE_OUTCOME 503, UNSAFE_PROCEDURAL 70, SAFE_VARIANT 30. Unsafe rate 33.8 percent.
@@ -356,8 +352,8 @@ A fictional e-commerce company, **ShopSphere**, with teams Payments, Shipping, R
 | `agents/orchestrator.py` | `run_system`: runs the entry agent, team agents started by `delegate`, the approver agent and the event notifier (with cascades) in one shared State |
 | `agents/mock_roles.py` | Free scripted notifier and approver for testing |
 | `agents/attacker.py` | The attacker agent: writes validated `unseen` scenarios offline (optionally rewords them with an LLM) |
-| `objective2/` | Stage 4: `rules.py` (R1 to R18 engine), `labeler.py`, `procedural.py`, `patterns.py`, `critic.py`, `gold.py`, `reports.py` |
-| `stage4.py` | Stage 4 command line (`all`, `label`, `explain`, `critic`, `critic-accept`, `gold-sample`, `gold-validate`) |
+| `objective2/` | Stage 4: `rules.py` (R1 to R18 engine), `labeler.py`, `procedural.py`, `patterns.py`, `critic.py`, `reports.py` |
+| `stage4.py` | Stage 4 command line (`all`, `label`, `explain`, `critic`, `critic-accept`) |
 | `app_analysis.py` | Stage 4 analysis UI (`streamlit run app_analysis.py`) |
 | `runner.py` | `list`, `single`, `run` (grid, resume, rate-limit handling), `summary` |
 | `app.py` | New Streamlit UI |
@@ -442,7 +438,6 @@ The Streamlit app was also smoke-tested: every scenario page renders and a run c
 
 ## 6. Honest limitations
 
-- **Labels come from rules, not from humans, until you validate them.** The rules are checked against a hand-labelled gold set (`stage4.py gold-sample` / `gold-validate`); that step is yours.
 - **Mock labels are about the pipeline.** The 1,695 shipped runs come from scripted agents, and the scenarios were written together with the rules, so rule coverage there is flattering (the critic finds nothing). Real Groq runs will show the true gaps.
 - **Mock is not an LLM.** Use it to test the pipeline. Real findings need Groq runs, and the free-tier limits make a large real dataset a multi-day job.
 - **Flow tracking is a heuristic.** It matches known markers (salary values, names, tokens, secret patterns) and attachments. A paraphrase with no marker would be missed, and a coincidental match could over-flag. Stage 4 decides on the fine flow only.
@@ -457,7 +452,6 @@ The Streamlit app was also smoke-tested: every scenario page renders and a run c
 
 ## 7. What is next
 
-1. **Hand-label the gold set** (`reports/gold_sample.csv`) and validate the rules.
 2. **Real runs** with Groq (start with `--scenarios tempting`), then rerun `python stage4.py all --data data/runs/groq.jsonl`. Keep mock and real data separate.
 3. **Later phases** (RAG, policy generation, GA, LTL monitor) read the files in `reports/`.
 

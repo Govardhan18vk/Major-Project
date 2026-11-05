@@ -1,135 +1,193 @@
-"""
-app.py - SafeTask v2 (Stages 1-3): run a ShopSphere scenario and watch the trajectory.
+"""SafeTask unified Streamlit dashboard.
 
+Run with:
     streamlit run app.py
-
-Pick a scenario, a safety-prompt strength and a backend (offline mock or real
-Groq LLM). The page shows each tool call as a vertical flow with its tags and
-flow flags, the goal result, the state diff, and timing. No SAFE/UNSAFE verdict
-is shown here: labelling is Objective 2 (Stage 4).
-Stage 3 adds agent lanes (who made each call), the delegation chain, the event list and the notifier's notices.
-Use the sidebar to switch to the attacker-generated scenarios (data/scenarios_generated.json, split "unseen").
-The older single-agent demo is still available as app_basic.py.
 """
 import json
 import os
+from pathlib import Path
+from types import SimpleNamespace
 
+import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
 from agents.llm import STRENGTHS
 from agents.loop import Budgets
+from env.state import ROOT
 from env.tools import menu_names
 from objective2.labeler import label_run
 from runner import load_scenarios, run_one
 
 load_dotenv()
 
-st.set_page_config(page_title="SafeTask v2 - ShopSphere", layout="wide")
-st.title("SafeTask: ShopSphere agentic environment")
-st.caption("Simulated e-commerce company. All people, data and secrets are fictional. Open mode: tools never block, "
-           "they only record what happens.")
+st.set_page_config(page_title="SafeTask", layout="wide")
 
-from pathlib import Path
-from env.state import ROOT
+RUN_FILE = ROOT / "data" / "runs" / "streamlit_groq.jsonl"
+SUMMARY_FILE = ROOT / "data" / "runs" / "streamlit_groq_summary.jsonl"
+REPORTS = ROOT / "reports"
 
-GEN = ROOT / "data" / "scenarios_generated.json"
-with st.sidebar:
-    use_gen = st.checkbox("Attacker-generated (unseen) scenarios", value=False, disabled=not GEN.exists(),
-                          help="Create them with: python -m agents.attacker --n 15")
-scenarios = load_scenarios(GEN if use_gen else None)
-by_id = {s["id"]: s for s in scenarios}
 
-with st.sidebar:
-    st.header("Settings")
-    backend = st.radio("Backend", ["mock", "groq"],
-                       index=1 if os.environ.get("GROQ_API_KEY") else 0,
-                       help="mock = free offline scripted agent; groq = real LLM")
-    api_key, model = None, "openai/gpt-oss-20b"
-    if backend == "groq":
-        api_key = st.text_input("Groq API key", type="password", value=os.environ.get("GROQ_API_KEY", ""))
-        model = st.text_input("Groq model", value=model)
-    category = st.selectbox("Category", ["all"] + sorted({s["category"] for s in scenarios}))
-    pool = [s for s in scenarios if category == "all" or s["category"] == category]
-    sid = st.selectbox("Scenario", [s["id"] for s in pool], format_func=lambda i: f"{i}  {by_id[i]['name']}")
-    prompt = st.selectbox("Safety prompt strength", list(STRENGTHS),
-                          format_func=lambda p: {"p0": "p0 - none", "p1": "p1 - mild hint", "p2": "p2 - strict rules"}[p])
-    temperature = st.slider("Temperature", 0.0, 1.5, 1.0, 0.1)
-    n_runs = st.slider("Runs of this scenario", 1, 8, 3)
-    token_budget = st.number_input("Token budget per run", 5000, 200000, 60000, 5000)
+def save_run(rows, summary):
+    """Append one completed UI run to the durable Groq dataset."""
+    RUN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with RUN_FILE.open("a", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, default=str) + "\n")
+    with SUMMARY_FILE.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(summary, default=str) + "\n")
 
-sc = by_id[sid]
-st.subheader(f"{sc['id']}: {sc['name']}")
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Acting user", sc["acting_user"])
-c2.metric("Category", sc["category"])
-c3.metric("Tempting", "yes" if sc.get("tempting") else "no")
-c4.metric("Entry agent", sc.get("agent", "assistant") + (" + notifier" if sc.get("notifier") else "") +
-          (" + approver agent" if sc.get("approver_mode") == "agent" else ""))
-st.info(sc["task"])
-with st.expander("Tools this agent can see"):
-    st.write(", ".join(menu_names(sc["menu"])))
-if sc.get("seed_messages"):
-    with st.expander("Messages waiting in the inbox"):
-        for m in sc["seed_messages"]:
-            st.write(f"**From:** {m['from']}  ({m['origin']})  \n**Subject:** {m['subject']}  \n{m['body']}")
+
+def rebuild_reports():
+    """Refresh Objective 2 reports from runs collected in this dashboard."""
+    import stage4
+
+    stage4.cmd_all(SimpleNamespace(data=[str(RUN_FILE)], min_support=2))
 
 
 def render_flow(rows):
     if not rows:
         st.write("_No tool calls made._")
         return
-    for i, r in enumerate(rows):
+    for index, row in enumerate(rows):
         flags = []
-        if r.get("flow") and r["flow"]["ok"] is False:
+        if row.get("flow") and row["flow"]["ok"] is False:
             flags.append("flow flagged")
-        if r.get("untrusted"):
+        if row.get("untrusted"):
             flags.append("untrusted content")
-        if r.get("fault"):
-            flags.append(f"fault: {r['fault']}")
-        if r.get("tags_read"):
-            flags.append("read: " + "/".join(r["tags_read"]))
+        if row.get("fault"):
+            flags.append(f"fault: {row['fault']}")
+        if row.get("tags_read"):
+            flags.append("read: " + "/".join(row["tags_read"]))
         with st.container(border=True):
-            lane = " > ".join(r.get("chain") or [r["agent"]])
-            st.markdown(f"**{r['step']}. `{r['tool']}`**  :blue[{r['agent']}]  " + ("(spawned by step %s)  " % r["parent_step"] if r.get("parent_step") else "") + ("  \n" + " | ".join(flags) if flags else ""))
-            if r.get("intent"):
-                st.caption(f"chain: {lane}  |  depth {r['depth']}" + (f"  |  triggered by event {r['trigger_event']}" if r.get("trigger_event") else ""))
-            st.caption(f"intent: {r['intent']}")
-            st.code(json.dumps(r["args"], ensure_ascii=False), language="json")
-            st.caption(f"-> {json.dumps(r['result'], ensure_ascii=False)[:260]}")
-            st.caption(f"{r['llm_seconds']:.2f}s LLM | {r['tool_seconds'] * 1000:.2f} ms tool | sim time {r['sim_time']}")
-            if r.get("flow") and r["flow"]["fine_flows"]:
-                st.caption("data flowed: " + ", ".join(f"{f['resource']} [{f['tag']}] ok={f['ok']}" for f in r["flow"]["fine_flows"]))
-        if i < len(rows) - 1:
+            lane = " > ".join(row.get("chain") or [row["agent"]])
+            st.markdown(
+                f"**{row['step']}. `{row['tool']}`** :blue[{row['agent']}]"
+                + (f" (spawned by step {row['parent_step']})" if row.get("parent_step") else "")
+                + (f"  \n{' | '.join(flags)}" if flags else "")
+            )
+            st.caption(f"chain: {lane} | intent: {row.get('intent', '')}")
+            st.code(json.dumps(row["args"], ensure_ascii=False), language="json")
+            st.caption(f"-> {json.dumps(row['result'], ensure_ascii=False)[:260]}")
+            st.caption(
+                f"{row['llm_seconds']:.2f}s LLM | "
+                f"{row['tool_seconds'] * 1000:.2f} ms tool | sim time {row['sim_time']}"
+            )
+            if row.get("flow") and row["flow"]["fine_flows"]:
+                st.caption(
+                    "data flowed: "
+                    + ", ".join(
+                        f"{flow['resource']} [{flow['tag']}] ok={flow['ok']}"
+                        for flow in row["flow"]["fine_flows"]
+                    )
+                )
+        if index < len(rows) - 1:
             st.markdown("<div style='text-align:center'>&#8595;</div>", unsafe_allow_html=True)
 
 
-if st.button("Run", type="primary"):
-    if backend == "groq" and not api_key:
-        st.error("Enter a Groq API key, or switch to the mock backend.")
-        st.stop()
-    results = []
-    for i in range(n_runs):
-        with st.spinner(f"Run {i + 1} of {n_runs}..."):
-            rows, summ = run_one(sc, backend, model, temperature, prompt, 1000 + i, api_key, Budgets(int(token_budget), 60))
-        results.append((rows, summ))
-    st.session_state["results"] = results
+def render_run_agents():
+    st.title("SafeTask: Run agents")
+    st.caption(
+        "Run a fictional ShopSphere scenario with the mock backend or the real Groq backend. "
+        "Groq runs are saved automatically."
+    )
+    generated = ROOT / "data" / "scenarios_generated.json"
+    with st.sidebar:
+        use_generated = st.checkbox(
+            "Attacker-generated scenarios",
+            value=False,
+            disabled=not generated.exists(),
+        )
+    scenarios = load_scenarios(generated if use_generated else None)
+    by_id = {scenario["id"]: scenario for scenario in scenarios}
 
-results = st.session_state.get("results")
-if results:
+    with st.sidebar:
+        st.header("Run settings")
+        backend = st.radio(
+            "Backend",
+            ["mock", "groq"],
+            index=1 if os.environ.get("GROQ_API_KEY") else 0,
+            help="mock is offline; groq uses the real API.",
+        )
+        api_key = None
+        model = "openai/gpt-oss-20b"
+        if backend == "groq":
+            api_key = st.text_input(
+                "Groq API key",
+                type="password",
+                value=os.environ.get("GROQ_API_KEY", ""),
+            )
+            model = st.text_input("Groq model", value=model)
+        category = st.selectbox("Category", ["all"] + sorted({s["category"] for s in scenarios}))
+        pool = [s for s in scenarios if category == "all" or s["category"] == category]
+        sid = st.selectbox(
+            "Scenario",
+            [s["id"] for s in pool],
+            format_func=lambda value: f"{value}  {by_id[value]['name']}",
+        )
+        prompt = st.selectbox(
+            "Safety prompt",
+            list(STRENGTHS),
+            format_func=lambda value: {
+                "p0": "p0 - none",
+                "p1": "p1 - mild hint",
+                "p2": "p2 - strict rules",
+            }[value],
+        )
+        temperature = st.slider("Temperature", 0.0, 1.5, 1.0, 0.1)
+        n_runs = st.slider("Runs", 1, 8, 3)
+        token_budget = st.number_input("Token budget per run", 5000, 200000, 60000, 5000)
+
+    scenario = by_id[sid]
+    st.subheader(f"{scenario['id']}: {scenario['name']}")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Acting user", scenario["acting_user"])
+    c2.metric("Category", scenario["category"])
+    c3.metric("Tempting", "yes" if scenario.get("tempting") else "no")
+    c4.metric("Entry agent", scenario.get("agent", "assistant"))
+    st.info(scenario["task"])
+    with st.expander("Tools this agent can see"):
+        st.write(", ".join(menu_names(scenario["menu"])))
+
+    if st.button("Run", type="primary"):
+        if backend == "groq" and not api_key:
+            st.error("Enter a Groq API key.")
+            st.stop()
+        results = []
+        for index in range(n_runs):
+            with st.spinner(f"Run {index + 1} of {n_runs}..."):
+                rows, summary = run_one(
+                    scenario,
+                    backend,
+                    model,
+                    temperature,
+                    prompt,
+                    1000 + index,
+                    api_key,
+                    Budgets(int(token_budget), 60),
+                )
+            results.append((rows, summary))
+            if backend == "groq" and not summary["error"]:
+                save_run(rows, summary)
+        if backend == "groq" and any(not summary["error"] for _, summary in results):
+            rebuild_reports()
+            st.success(f"Saved completed Groq runs to {RUN_FILE}")
+        st.session_state["results"] = results
+        st.session_state["last_scenario_id"] = scenario["id"]
+
+    results = st.session_state.get("results")
+    if not results:
+        return
     st.divider()
-    distinct = len({tuple(s["tools"]) for _, s in results})
-    st.markdown(f"**{len(results)} runs, {distinct} distinct trajectories.**")
-    tabs = st.tabs([f"Run {i + 1}" for i in range(len(results))])
-    for tab, (rows, s) in zip(tabs, results):
+    st.markdown(f"**{len(results)} runs, {len({tuple(s['tools']) for _, s in results})} distinct trajectories.**")
+    tabs = st.tabs([f"Run {index + 1}" for index in range(len(results))])
+    for tab, (rows, summary) in zip(tabs, results):
         with tab:
-            label = label_run(rows, s, sc)
+            label = label_run(rows, summary, scenario)
             if label["label"].startswith("UNSAFE"):
                 st.error(f"Safety result: **{label['label']}**")
-            elif label["label"] == "SAFE":
-                st.success("Safety result: **SAFE**")
-            elif label["label"] == "SAFE_VARIANT":
-                st.success("Safety result: **SAFE_VARIANT**")
+            elif label["label"] in ("SAFE", "SAFE_VARIANT"):
+                st.success(f"Safety result: **{label['label']}**")
             else:
                 st.warning(f"Safety result: **{label['label']}**")
             st.caption(
@@ -141,17 +199,110 @@ if results:
                     for reason in label["reasons"]:
                         st.write(f"- {reason}")
             a, b, c, d = st.columns(4)
-            a.metric("Task success", "yes" if s["task_success"] else "no")
-            b.metric("Steps", s["steps"])
-            c.metric("Tokens", s["tokens"])
-            d.metric("Total time", f"{s['timing']['total_seconds']:.2f}s")
-            e1, e2, e3, e4 = st.columns(4)
-            e1.metric("Agents", len(s["agents_used"]))
-            e2.metric("Delegations", s["delegations"])
-            e3.metric("Events", s["events"])
-            e4.metric("Notices (flagged)", f"{s['notifications']} ({s['notifications_flagged']})")
-            st.caption("agents used: " + ", ".join(s["agents_used"]) + f"  |  max delegation depth {s['max_depth']}  |  max event depth {s['max_event_depth']}")
+            a.metric("Task success", "yes" if summary["task_success"] else "no")
+            b.metric("Steps", summary["steps"])
+            c.metric("Tokens", summary["tokens"])
+            d.metric("Total time", f"{summary['timing']['total_seconds']:.2f}s")
             render_flow(rows)
-            st.markdown(f"**Final answer:** {s['final_answer']}  \n**Stopped because:** {s['stop_reason']}")
-            st.markdown("**State diff (what changed):** " + (", ".join(f"`{x}`" for x in s["state_diff"]) or "nothing"))
-            st.caption(f"Outgoing messages or shares with a flagged data flow: {s['outgoing_flow_flags']} of {s['outgoing_flows']}")
+            st.markdown(f"**Final answer:** {summary['final_answer']}")
+            st.markdown(
+                "**State diff:** "
+                + (", ".join(f"`{item}`" for item in summary["state_diff"]) or "nothing")
+            )
+
+
+def render_objective2():
+    st.title("Objective 2: Judge")
+    summary_path = REPORTS / "stage4_summary.json"
+    if not summary_path.exists():
+        st.info("Run a Groq scenario from the Run agents page first.")
+        return
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    labels = pd.read_json(REPORTS / "labels.jsonl", lines=True)
+    patterns = json.loads((REPORTS / "risk_patterns.json").read_text(encoding="utf-8"))
+    procedural = json.loads((REPORTS / "procedural.json").read_text(encoding="utf-8"))
+    rules = json.loads((REPORTS / "rules.json").read_text(encoding="utf-8"))
+    st.caption(f"{summary['runs']['total']} saved runs: {summary['runs']['by_source']}")
+
+    page = st.sidebar.radio(
+        "Objective 2 section",
+        ["Overview", "Prompt strength", "Violations", "Risk patterns", "Procedural", "Run explorer"],
+    )
+    if page == "Overview":
+        a, b, c, d = st.columns(4)
+        a.metric("Runs", len(labels))
+        b.metric("Unsafe rate", f"{labels['label'].str.startswith('UNSAFE').mean():.1%}")
+        c.metric("Unsafe but successful", f"{labels['unsafe_but_successful'].mean():.1%}")
+        d.metric("Task success", f"{labels['task_success'].mean():.1%}")
+        st.bar_chart(labels["label"].value_counts())
+        st.dataframe(pd.crosstab(labels["category"], labels["label"]), use_container_width=True)
+    elif page == "Prompt strength":
+        table = labels.groupby("prompt_strength").agg(
+            runs=("run_id", "count"),
+            unsafe=("label", lambda values: values.str.startswith("UNSAFE").mean()),
+            outcome=("label", lambda values: (values == "UNSAFE_OUTCOME").mean()),
+            declined=("label", lambda values: (values == "DECLINED").mean()),
+            task_success=("task_success", "mean"),
+        )
+        st.dataframe(table.style.format("{:.1%}"), use_container_width=True)
+        st.bar_chart(table[["unsafe", "outcome", "declined"]])
+    elif page == "Violations":
+        violations = pd.Series([rule for ruleset in labels["violated_rules"] for rule in ruleset]).value_counts()
+        st.bar_chart(violations)
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {"rule": key, "name": value["name"], "type": value["kind"], "severity": value["severity"], "meaning": value["text"]}
+                    for key, value in rules.items()
+                ]
+            ),
+            use_container_width=True,
+        )
+    elif page == "Risk patterns":
+        st.json(summary["risk_patterns"]["coverage_by_split"])
+        st.dataframe(
+            pd.DataFrame(
+                [{**pattern, "sequence": " > ".join(pattern["sequence"]), "rules": ",".join(pattern["rules"])} for pattern in patterns]
+            ),
+            use_container_width=True,
+        )
+    elif page == "Procedural":
+        table = pd.DataFrame(procedural["scenarios"]).T
+        st.dataframe(
+            table[["runs", "distinct_paths", "clusters", "entropy_bits", "mean_edit_distance_to_reference"]],
+            use_container_width=True,
+        )
+        scenario_id = st.selectbox("Scenario", list(procedural["scenarios"]))
+        st.json(procedural["scenarios"][scenario_id])
+    else:
+        scenario_id = st.selectbox("Scenario", sorted(labels["scenario_id"].unique()))
+        subset = labels[labels["scenario_id"] == scenario_id]
+        run_id = st.selectbox("Run", subset["run_id"])
+        selected = subset[subset["run_id"] == run_id].iloc[0]
+        st.subheader(
+            f"{selected['label']} | risk {selected['risk_score']} | "
+            f"first violation {selected['first_violation_step'] or 'none'}"
+        )
+        st.write(selected["reasons"])
+
+
+def main():
+    st.sidebar.title("SafeTask")
+    page = st.sidebar.radio(
+        "Pages",
+        ["Home", "1. Run agents", "2. Objective 2: judge", "3. Objective 3: policies"],
+    )
+    if page == "Home":
+        st.title("SafeTask")
+        st.write("Run Groq agents, automatically save trajectories, and inspect Objective 2 results.")
+        st.info("Start with **1. Run agents** in the sidebar.")
+    elif page == "1. Run agents":
+        render_run_agents()
+    elif page == "2. Objective 2: judge":
+        render_objective2()
+    else:
+        st.title("Objective 3: Policies")
+        st.info("Policy generation is not implemented yet.")
+
+
+main()

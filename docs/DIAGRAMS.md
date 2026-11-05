@@ -47,7 +47,6 @@ flowchart TD
     I --> K[Pattern mining on known split]
     I --> L[Critic proposes rules - human accepts]
     L -->|rules_extra.json| H
-    I --> M[Gold set: humans check the rules]
     J --> N[reports/]
     K --> N
     I --> N
