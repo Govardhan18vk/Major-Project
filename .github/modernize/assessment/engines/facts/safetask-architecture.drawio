@@ -1,0 +1,128 @@
+<mxfile host="app.diagrams.net" modified="2026-11-04T09:39:00.000Z" agent="Copilot" version="24.7.17">
+  <diagram id="safetask-architecture" name="SafeTask Architecture">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="gClient" value="CLIENT" style="swimlane;fontStyle=1;rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="30" y="30" width="250" height="180" as="geometry"/>
+        </mxCell>
+        <mxCell id="nUser" value="Researcher or User" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="gClient">
+          <mxGeometry x="25" y="50" width="200" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="nRunUI" value="app.py&lt;br&gt;Scenario Runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="gClient">
+          <mxGeometry x="25" y="110" width="200" height="45" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="gExec" value="AGENT EXECUTION" style="swimlane;fontStyle=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="330" y="30" width="300" height="270" as="geometry"/>
+        </mxCell>
+        <mxCell id="nRunner" value="runner.py&lt;br&gt;Scenario Adapter" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="gExec">
+          <mxGeometry x="25" y="45" width="250" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="nLoop" value="agents.loop&lt;br&gt;Decision Loop" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="gExec">
+          <mxGeometry x="25" y="105" width="250" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="nOrch" value="agents.orchestrator&lt;br&gt;Delegation and Events" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="gExec">
+          <mxGeometry x="25" y="165" width="250" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="nFactory" value="agents.llm&lt;br&gt;Agent Factory" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="gExec">
+          <mxGeometry x="25" y="225" width="250" height="32" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="gAgents" value="AGENT ROLES" style="swimlane;fontStyle=1;rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="680" y="30" width="300" height="270" as="geometry"/>
+        </mxCell>
+        <mxCell id="nMock" value="MockAgent&lt;br&gt;Offline" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="gAgents">
+          <mxGeometry x="25" y="45" width="115" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="nGroq" value="GroqAgent&lt;br&gt;Real LLM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="gAgents">
+          <mxGeometry x="160" y="45" width="115" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="nTeam" value="Team Agents&lt;br&gt;Payments, Shipping, HR, Risk, Platform, Vendor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="gAgents">
+          <mxGeometry x="25" y="105" width="250" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="nNotify" value="Notifier" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="gAgents">
+          <mxGeometry x="25" y="175" width="115" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="nApprove" value="Approver" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="gAgents">
+          <mxGeometry x="160" y="175" width="115" height="42" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="nGroqApi" value="Groq API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="100" width="220" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="gEnv" value="SHOPSPHERE ENVIRONMENT" style="swimlane;fontStyle=1;rounded=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="30" y="370" width="430" height="300" as="geometry"/>
+        </mxCell>
+        <mxCell id="nTools" value="env.tools&lt;br&gt;Tool Registry and Menus" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="gEnv">
+          <mxGeometry x="25" y="45" width="180" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="nState" value="env.state&lt;br&gt;Fresh State Per Run" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="gEnv">
+          <mxGeometry x="225" y="45" width="180" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="nFlow" value="Tags and Data Flow" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="gEnv">
+          <mxGeometry x="25" y="115" width="180" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="nEvents" value="Events and Notifications" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="gEnv">
+          <mxGeometry x="225" y="115" width="180" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="nCompany" value="data/company&lt;br&gt;Synthetic users and records" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="gEnv">
+          <mxGeometry x="25" y="180" width="180" height="58" as="geometry"/>
+        </mxCell>
+        <mxCell id="nScenarios" value="data/scenarios.json&lt;br&gt;49 scenarios" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="gEnv">
+          <mxGeometry x="225" y="180" width="180" height="58" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="gEval" value="OBJECTIVE 2 EVALUATION" style="swimlane;fontStyle=1;rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="510" y="370" width="470" height="300" as="geometry"/>
+        </mxCell>
+        <mxCell id="nRules" value="objective2.rules.py&lt;br&gt;R1 to R18" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="gEval">
+          <mxGeometry x="25" y="45" width="200" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="nLabel" value="objective2.labeler.py&lt;br&gt;Safety Labeler" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="gEval">
+          <mxGeometry x="245" y="45" width="200" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="nStage" value="stage4.py&lt;br&gt;Analysis Pipeline" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="gEval">
+          <mxGeometry x="25" y="115" width="200" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="nPatterns" value="Risk Patterns&lt;br&gt;Procedural Metrics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="gEval">
+          <mxGeometry x="245" y="115" width="200" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="nReports" value="reports/&lt;br&gt;JSON, JSONL, CSV, Markdown" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="gEval">
+          <mxGeometry x="25" y="185" width="200" height="58" as="geometry"/>
+        </mxCell>
+        <mxCell id="nDashboard" value="app_analysis.py&lt;br&gt;Objective 2 Dashboard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="gEval">
+          <mxGeometry x="245" y="185" width="200" height="58" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="nRuns" value="data/runs&lt;br&gt;Trajectory JSONL" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="455" width="220" height="65" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nUser" target="nRunUI"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nRunUI" target="nRunner"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nRunner" target="nLoop"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nLoop" target="nFactory"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nFactory" target="nMock"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nFactory" target="nGroq"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="LLM calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nGroq" target="nGroqApi"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nLoop" target="nTools"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nTools" target="nState"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nCompany" target="nState"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nOrch" target="nTeam"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nOrch" target="nNotify"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nOrch" target="nApprove"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e14" value="writes rows" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nLoop" target="nRuns"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nRuns" target="nLabel"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e16" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nLabel" target="nRules"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e17" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nStage" target="nReports"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e18" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nPatterns" target="nReports"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e19" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nReports" target="nDashboard"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e20" value="immediate result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" edge="1" parent="1" source="nLabel" target="nRunUI"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

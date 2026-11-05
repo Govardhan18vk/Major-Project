@@ -1,81 +1,91 @@
 # Architecture Diagram
 
-SafeTask is a Streamlit UI over a single-process Python simulation. The
-application has no persistent database or production service boundary; its
-main architecture is the repeated decision loop between the UI, an LLM, a
-tool registry, and isolated in-memory state.
+SafeTask is a Python and Streamlit simulation for evaluating tool-using LLM agents. It runs synthetic ShopSphere scenarios with either a deterministic mock agent or Groq, records every action, and applies Objective 2 safety rules to produce explainable labels.
 
 ## Application Architecture
 
 <!-- mermaid-checked: no \n, no em-dash/en-dash, no {} in labels, subgraphs are id["label"], arrows are -->|"label"|, all subgraphs closed by end, ids unique -->
 ~~~mermaid
 flowchart TD
-    subgraph Client["Client Layer"]
-        User["Acting User"]
-        Streamlit["Streamlit UI"]
+    subgraph ClientLayer["Client Layer"]
+        User["Researcher or user"]
+        RunUI["app.py Streamlit runner"]
+        AnalysisUI["app_analysis.py dashboard"]
     end
-    subgraph Agent["Agent Layer"]
-        Loop["run_agent loop"]
-        LLM["Groq LLM client"]
-        Registry["Tool registry"]
+    subgraph AgentLayer["Agent Layer"]
+        Runner["runner.py"]
+        Loop["agents.loop agent loop"]
+        LLM["agents.llm"]
+        Orchestrator["agents.orchestrator"]
     end
-    subgraph Simulation["Simulation Layer"]
-        Tools["Security and business tools"]
-        State["Per-run State"]
-        Safety["check_safety analysis"]
+    subgraph SimulationLayer["Simulation Layer"]
+        Tools["env.tools tool registry"]
+        State["env.state per-run state"]
+        Events["Events and notifications"]
+        Goals["Goal and state diff checks"]
     end
-    subgraph Stores["In-memory Stores"]
-        Users[("Users")]
-        Employees[("Employee database")]
-        Files[("Synthetic files")]
-        Mail[("Email drafts")]
-        Audit[("Audit logs")]
+    subgraph EvaluationLayer["Objective 2 Layer"]
+        Rules["objective2.rules R1 to R18"]
+        Labeler["objective2.labeler"]
+        Reports["stage4.py report pipeline"]
+        Patterns["Risk patterns and procedural analysis"]
+    end
+    subgraph DataLayer["Synthetic Data and Reports"]
+        Company[("data/company JSON")]
+        Scenarios[("data/scenarios JSON")]
+        Prompts[("data/prompts text")]
+        Runs[("data/runs JSONL")]
+        ReportFiles[("reports JSON and CSV")]
+    end
+    subgraph ExternalLayer["External Service"]
+        Groq["Groq OpenAI compatible API"]
     end
 
-    User -->|"submits task"| Streamlit
-    Streamlit -->|"starts repeated runs"| Loop
-    Loop -->|"requests decision"| LLM
-    LLM -->|"returns one tool call"| Loop
-    Loop -->|"dispatches by name"| Registry
-    Registry -->|"invokes"| Tools
+    User -->|"selects task and settings"| RunUI
+    RunUI -->|"starts scenario runs"| Runner
+    Runner -->|"creates agents"| LLM
+    Runner -->|"runs scenario"| Orchestrator
+    Orchestrator -->|"invokes"| Loop
+    Loop -->|"requests next decision"| LLM
+    LLM -->|"real model calls"| Groq
+    Loop -->|"dispatches tool calls"| Tools
     Tools -->|"reads or mutates"| State
-    State --> Users
-    State --> Employees
-    State --> Files
-    State --> Mail
-    State --> Audit
-    Loop -->|"history"| Safety
-    Safety -->|"verdict"| Streamlit
-    Loop -->|"final answer"| Streamlit
+    State -->|"loads synthetic records"| Company
+    State -->|"loads scenario seeds"| Scenarios
+    LLM -->|"loads safety prompt"| Prompts
+    Orchestrator -->|"creates events"| Events
+    Goals -->|"checks completion"| State
+    Loop -->|"writes trajectory rows"| Runs
+    Runs -->|"evaluated by"| Rules
+    Rules -->|"violations"| Labeler
+    Labeler -->|"labels and reasons"| Reports
+    Reports -->|"writes"| ReportFiles
+    Patterns -->|"mines from labels"| ReportFiles
+    AnalysisUI -->|"reads"| ReportFiles
+    Labeler -->|"immediate result"| RunUI
 ~~~
 
 ### Technology Stack Summary
 
 | Layer | Technology | Version | Purpose |
 |---|---|---|---|
-| UI | Streamlit | >=1.35.0 | Collects task settings and renders trajectories |
-| Runtime | Python | Project interpreter | Runs the simulation and UI |
-| Agent client | OpenAI-compatible Python client | >=1.30.0 | Calls Groq when a real LLM run is requested |
-| LLM endpoint | Groq OpenAI-compatible API | Runtime-selected model | Chooses the next tool or final answer |
-| State | Python dictionaries and lists | Standard library | Stores isolated synthetic data per run |
-| Flow UI | streamlit-agraph | >=0.0.45 | Renders clickable trajectory nodes in `flows.py` |
+| UI | Streamlit | >=1.35.0 | Runs scenarios and displays safety results |
+| Runtime | Python | 3.10 or newer | Executes the simulation and analysis |
+| LLM client | OpenAI Python client | >=1.30.0 | Calls the Groq compatible endpoint |
+| LLM service | Groq API | Runtime selected | Chooses the next tool or final answer |
+| Local agent | Python mock agents | Project code | Provides repeatable offline behavior |
+| Data format | JSON and JSONL | Standard format | Stores company data, scenarios, runs, and reports |
+| Testing | pytest | >=7.0 | Validates environment, agents, tools, and Objective 2 |
 
-### Data Storage & External Services
+### Data Storage and External Services
 
-The users, employee records, files, email drafts, and audit logs are all
-Python objects in a fresh `State` instance. There is no SQL server, cache,
-message broker, filesystem persistence, or real email provider. The default
-UI uses Groq as an optional external LLM endpoint; all application data sent
-to that endpoint is synthetic demo data.
+SafeTask has no database, cache, message broker, or production filesystem service. Each run creates a fresh in-memory `State` from synthetic JSON files under `data/company/`, scenario definitions, and prompt files. Trajectories are persisted as JSONL under `data/runs/`, and Objective 2 writes JSON, JSONL, CSV, and Markdown reports under `reports/`. Groq is the only external service and is optional when the mock backend is selected.
 
 ### Key Architectural Decisions
 
-- The tool registry separates LLM-selected tool names from Python
-  implementations while keeping dispatch task-agnostic.
-- Security checks are modeled as callable tools rather than hard-coded
-  middleware so unsafe tool orderings remain observable.
-- State is copied per run, allowing repeated runs to be compared without
-  cross-run mutations.
+- The environment runs in open mode: tools record actions and data flows instead of blocking them, allowing Objective 2 to evaluate unsafe behavior afterward.
+- Authority is tracked separately for the original requester and delegated team agents, enabling confused-deputy detection.
+- Objective 2 uses deterministic rules for labels while keeping the LLM responsible only for action selection.
 
 ## Component Relationships
 
@@ -83,50 +93,85 @@ to that endpoint is synthetic demo data.
 ~~~mermaid
 flowchart LR
     subgraph cPresentation["Presentation"]
-        cApp["app.py UI"]
-        cFlows["flows.py UI"]
+        cRunUI["app.py"]
+        cAnalysisUI["app_analysis.py"]
     end
-    subgraph cBusiness["Business Logic"]
-        cRun["run_agent"]
-        cMock["MockLLM"]
-        cGroq["GroqLLM"]
-        cSafety["check_safety"]
+    subgraph cExecution["Execution"]
+        cRunner["runner.py"]
+        cLoop["agent_loop"]
+        cFactory["make_factory"]
+        cSystem["run_system"]
     end
-    subgraph cData["Data Access"]
+    subgraph cAgents["Agents"]
+        cMock["MockAgent"]
+        cGroq["GroqAgent"]
+        cTeam["Team agents"]
+        cNotifier["Notifier agent"]
+        cApprover["Approver agent"]
+    end
+    subgraph cEnvironment["Environment"]
+        cMenus["Role menus"]
         cRegistry["TOOLS registry"]
-        cTools["Tool functions"]
         cState["State"]
+        cFlows["Data flow tracker"]
+        cEvents["Event store"]
+        cGoals["Goal evaluator"]
     end
-    subgraph cInfra["Infrastructure"]
-        cApi["Groq API"]
-        cMemory["Synthetic dictionaries"]
+    subgraph cEvaluation["Objective 2"]
+        cRules["Rule catalogue"]
+        cEvaluate["Rule evaluator"]
+        cLabel["Labeler"]
+        cStage["stage4.py"]
+        cPattern["Pattern miner"]
     end
 
-    cApp -->|"starts runs"| cRun
-    cFlows -->|"starts runs"| cRun
-    cRun -->|"chooses client"| cMock
-    cRun -->|"chooses client"| cGroq
-    cGroq -->|"requests decisions"| cApi
-    cRun -->|"dispatches names"| cRegistry
-    cRegistry -->|"calls"| cTools
-    cTools -->|"uses"| cState
-    cState -->|"copies"| cMemory
-    cFlows -->|"analyzes history"| cSafety
-    cSafety -->|"verdict"| cFlows
+    cRunUI -->|"starts"| cRunner
+    cAnalysisUI -->|"reads reports"| cStage
+    cRunner -->|"builds"| cFactory
+    cRunner -->|"starts"| cSystem
+    cSystem -->|"runs"| cLoop
+    cFactory -->|"creates"| cMock
+    cFactory -->|"creates"| cGroq
+    cSystem -->|"delegates"| cTeam
+    cSystem -->|"reacts to events"| cNotifier
+    cSystem -->|"handles approvals"| cApprover
+    cLoop -->|"gets allowed tools"| cMenus
+    cLoop -->|"dispatches"| cRegistry
+    cRegistry -->|"uses"| cState
+    cRegistry -->|"records"| cFlows
+    cRegistry -->|"publishes"| cEvents
+    cSystem -->|"checks completion"| cGoals
+    cLoop -->|"writes rows"| cLabel
+    cLabel -->|"calls"| cEvaluate
+    cEvaluate -->|"applies"| cRules
+    cStage -->|"loads runs"| cLabel
+    cStage -->|"mines"| cPattern
+    cStage -->|"writes reports"| cAnalysisUI
 ~~~
 
 ### Component Inventory
 
 | Component | Layer | Type | Responsibility |
 |---|---|---|---|
-| `app.py` | Presentation | Streamlit page | Runs repeated trajectories and compares sequences |
-| `flows.py` | Presentation | Streamlit page | Displays clickable nodes and safety verdicts |
-| `run_agent` | Business Logic | Agent orchestrator | Drives the one-tool-at-a-time loop and stop conditions |
-| `MockLLM` | Business Logic | Offline decision client | Builds randomized demonstration plans |
-| `GroqLLM` | Business Logic | API decision client | Requests tool calls from Groq |
-| `check_safety` | Business Logic | Analyzer | Detects missing or reordered safety steps |
-| `TOOLS` | Data Access | Registry | Maps tool names to Python functions |
-| Tool functions | Data Access | Domain operations | Search, query, read, delete, authenticate, email, and audit |
-| `State` | Data Access | Run context | Owns isolated users, records, files, mail, and logs |
-| Synthetic dictionaries | Infrastructure | Seed data | Provide fake company identities and resources |
-| Groq API | Infrastructure | External service | Supplies runtime LLM decisions when configured |
+| `app.py` | Presentation | Streamlit page | Selects scenarios, backend, prompt strength, and run count |
+| `app_analysis.py` | Presentation | Streamlit page | Displays Objective 2 summaries, violations, patterns, and run details |
+| `runner.py` | Execution | CLI and adapter | Loads scenarios and saves trajectory and summary JSONL |
+| `agent_loop` | Execution | Control loop | Requests one decision, executes one tool, records one row, and repeats |
+| `run_system` | Execution | Multi-agent runtime | Coordinates entry agents, delegation, approvals, notifications, and shared state |
+| `make_factory` | Execution | Agent factory | Creates mock or Groq agents for each invocation |
+| `MockAgent` | Agents | Offline decision agent | Follows scenario scripts with controlled safety variation |
+| `GroqAgent` | Agents | External LLM adapter | Requests tool calls and final answers from Groq |
+| Team agents | Agents | Delegated workers | Perform department-specific work with restricted menus |
+| Notifier agent | Agents | Event worker | Decides notification audience and detail after events |
+| Approver agent | Agents | Approval worker | Verifies and records approval decisions |
+| `TOOLS` | Environment | Tool registry | Maps tool names to state operations |
+| `State` | Environment | In-memory domain model | Holds users, teams, records, permissions, changes, events, and flows |
+| Role menus | Environment | Authorization surface | Defines tools visible to each agent role |
+| Data flow tracker | Environment | Security telemetry | Tracks tagged data moving between resources and destinations |
+| Event store | Environment | In-memory event log | Supports notifier reactions and bounded cascades |
+| Goal evaluator | Environment | Scenario oracle | Determines task success and state differences |
+| Rule catalogue | Objective 2 | Safety definitions | Defines R1 through R18 with kind, severity, weight, and meaning |
+| Rule evaluator | Objective 2 | Deterministic analyzer | Finds rule violations in a completed run |
+| Labeler | Objective 2 | Classifier | Produces SAFE, SAFE_VARIANT, DECLINED, or unsafe labels |
+| `stage4.py` | Objective 2 | Analysis CLI | Builds labels, risk patterns, procedural metrics, and reports |
+| Pattern miner | Objective 2 | Generalization analyzer | Mines unsafe sequences from known runs and tests other splits |
