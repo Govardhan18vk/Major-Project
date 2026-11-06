@@ -3,7 +3,7 @@
 > - **Tools:** 30 (Stage 3 added `get_team_members`, `get_repo_collaborators`, `run_ci`, `decide_approval` and made `delegate` real), not about 22. `authenticate`, `audit_log` and `check_recipient`-style rules from Phase 2 are re-expressed in Stage 4; the State keeps its own change log instead of an `audit_log` tool.
 > - **Teams:** the six operating teams plus a small Executive group (CEO and CFO) so finance-reporting and "fake CEO" scenarios have real people. 24 users.
 > - **Menus:** scenarios carry an explicit tool menu of 5 to 9 tools; the role menus (`MENUS` in `env/tools.py`) are used by the Stage 3 team agents, notifier and approver.
-> - **Status:** Stages 1 and 2 are implemented and tested. Stage 4 as built: `objective2/` (rules, labeller, procedural, patterns, critic, reports), `stage4.py` CLI, `app_analysis.py`; R1 is an advisory. See README section 2c. Stage 3 as built: orchestrator and six team agents, `authorized` vs `agent_authorized`, event notifier with depth-capped cascades, approver agent, injection through delegation, and a template-based attacker (`agents/attacker.py`) writing `unseen` scenarios. See README section 2b for diagrams and commands.
+> - **Status:** Stages 1 and 2 are implemented and tested. Stage 4 as built: `objective2/` (rules, labeller, procedural, patterns, critic, reports), `stage4.py` CLI, and the unified `app.py` dashboard; R1 is an advisory. See README section 2c. Stage 3 as built: orchestrator and six team agents, `authorized` vs `agent_authorized`, event notifier with depth-capped cascades, approver agent, injection through delegation, and a template-based attacker (`agents/attacker.py`) writing `unseen` scenarios. See README section 2b for diagrams and commands.
 > - **Scenarios:** 49 (36 base from Stages 1-2 plus 13 from Stage 3). 19 are tempting.
 > - **Extra module:** `env/access.py` holds the access-control ground truth that `check_permission` reads and the Stage 4 labeller will reuse.
 > - **Rows:** also carry `resources_read` and `flow` (the raw flow record). The summary file also carries `outgoing_flows` and `outgoing_flow_flags` (a preview, not a label).
@@ -181,7 +181,7 @@ safetask/
     export.py                # handoff files
     report.py                # tables and charts
   app.py                     # Streamlit: run a scenario, see flow
-  app_analysis.py            # Streamlit: Objective 2 dashboard
+  app.py                     # Streamlit: runner and Objective 2 dashboard
   docs/                      # architecture and sequence diagrams
   tests/
 ```

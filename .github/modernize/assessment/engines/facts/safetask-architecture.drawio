@@ -94,7 +94,7 @@
         <mxCell id="nReports" value="reports/&lt;br&gt;JSON, JSONL, CSV, Markdown" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="gEval">
           <mxGeometry x="25" y="185" width="200" height="58" as="geometry"/>
         </mxCell>
-        <mxCell id="nDashboard" value="app_analysis.py&lt;br&gt;Objective 2 Dashboard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="gEval">
+        <mxCell id="nDashboard" value="app.py&lt;br&gt;Unified Objective 2 Dashboard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="gEval">
           <mxGeometry x="245" y="185" width="200" height="58" as="geometry"/>
         </mxCell>
 
