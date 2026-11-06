@@ -296,7 +296,7 @@ R1 to R8 re-express the Phase 2 rules on the new tools (`authenticate` and `audi
 python stage4.py all                                   # label + analyse + patterns + critic + all files
 python stage4.py all --data data/runs/groq.jsonl       # the same on real runs (repeat --data for several files)
 python stage4.py explain --run <first 8+ chars of a run_id>
-streamlit run app_analysis.py                          # the analysis UI (8 tabs)
+streamlit run app.py                                   # unified runner and Objective 2 dashboard
 
 python stage4.py critic --backend heuristic            # offline; or --backend groq (a different model from the defender)
 python stage4.py critic-accept X01                     # YOU accept a proposal, then rerun `all`
@@ -354,7 +354,7 @@ A fictional e-commerce company, **ShopSphere**, with teams Payments, Shipping, R
 | `agents/attacker.py` | The attacker agent: writes validated `unseen` scenarios offline (optionally rewords them with an LLM) |
 | `objective2/` | Stage 4: `rules.py` (R1 to R18 engine), `labeler.py`, `procedural.py`, `patterns.py`, `critic.py`, `reports.py` |
 | `stage4.py` | Stage 4 command line (`all`, `label`, `explain`, `critic`, `critic-accept`) |
-| `app_analysis.py` | Stage 4 analysis UI (`streamlit run app_analysis.py`) |
+| `app.py` | Unified Streamlit runner and Objective 2 analysis UI |
 | `runner.py` | `list`, `single`, `run` (grid, resume, rate-limit handling), `summary` |
 | `app.py` | New Streamlit UI |
 | `scripts/` | `build_company_data.py`, `build_scenarios.py` regenerate the JSON files |
@@ -408,7 +408,7 @@ The matching summary line has `task_success`, `state_diff` (for example `commit:
 | Library | Used for |
 |---|---|
 | `openai` | The OpenAI-compatible client, pointed at Groq's URL. No OpenAI key is needed |
-| `streamlit` | The web UI (`app.py` and `app_analysis.py`) |
+| `streamlit` | The unified web UI in `app.py` |
 | `pandas` | Tables in the Objective 2 analysis |
 | `tabulate` | Printing report tables |
 | `pytest` | The project test suite |

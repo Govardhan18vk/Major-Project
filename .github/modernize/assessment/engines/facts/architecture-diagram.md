@@ -10,7 +10,7 @@ flowchart TD
     subgraph ClientLayer["Client Layer"]
         User["Researcher or user"]
         RunUI["app.py Streamlit runner"]
-        AnalysisUI["app_analysis.py dashboard"]
+        AnalysisUI["app.py unified dashboard"]
     end
     subgraph AgentLayer["Agent Layer"]
         Runner["runner.py"]
@@ -94,7 +94,7 @@ SafeTask has no database, cache, message broker, or production filesystem servic
 flowchart LR
     subgraph cPresentation["Presentation"]
         cRunUI["app.py"]
-        cAnalysisUI["app_analysis.py"]
+        cAnalysisUI["app.py Objective 2"]
     end
     subgraph cExecution["Execution"]
         cRunner["runner.py"]
@@ -154,7 +154,7 @@ flowchart LR
 | Component | Layer | Type | Responsibility |
 |---|---|---|---|
 | `app.py` | Presentation | Streamlit page | Selects scenarios, backend, prompt strength, and run count |
-| `app_analysis.py` | Presentation | Streamlit page | Displays Objective 2 summaries, violations, patterns, and run details |
+| `app.py` | Presentation | Streamlit page | Runs scenarios and displays Objective 2 summaries, violations, patterns, and run details |
 | `runner.py` | Execution | CLI and adapter | Loads scenarios and saves trajectory and summary JSONL |
 | `agent_loop` | Execution | Control loop | Requests one decision, executes one tool, records one row, and repeats |
 | `run_system` | Execution | Multi-agent runtime | Coordinates entry agents, delegation, approvals, notifications, and shared state |
