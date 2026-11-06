@@ -6,15 +6,13 @@ stage4.py - Objective 2 command line: label runs, analyse, mine patterns, valida
   python stage4.py explain   --data data/runs/mock.jsonl --run <run_id>   why one run got its label
   python stage4.py critic    [--backend heuristic|groq]         -> reports/critic_proposals.json
   python stage4.py critic-accept X01,X02                        (human decision) -> reports/rules_extra.json
-  python stage4.py gold-sample                                  -> reports/gold_sample.csv (hand-label it)
-  python stage4.py gold-validate --a reports/gold_sample.csv [--b second_person.csv]
 Run `all` again after accepting critic rules: labels and reports are rebuilt with the extra rules.
 """
 import argparse
 import json
 import os
 
-from objective2 import critic, gold, labeler, patterns, procedural, reports
+from objective2 import critic, labeler, patterns, procedural, reports
 
 REPORTS = "reports"
 
@@ -40,7 +38,6 @@ def cmd_all(a):
     cov = patterns.coverage(pats, ab, labels)
     proc = procedural.analyse(runs, labels, sc)
     cr = critic.run_critic(runs, labels, "heuristic", out=os.path.join(REPORTS, "critic_proposals.json"))
-    gold.sample(labels, runs, sc, n=a.gold_size, out_dir=REPORTS)
     summ = reports.build(runs, labels, pats, cov, proc, sc, REPORTS)
     print(f"{len(labels)} runs labelled: {summ['label_distribution']}")
     print(f"unsafe rate {summ['unsafe_rate']:.1%}, unsafe-but-successful {summ['unsafe_but_successful_rate']:.1%}")
@@ -48,7 +45,7 @@ def cmd_all(a):
     print(f"{len(pats)} risk patterns; coverage by split: " + str({k: v['coverage'] for k, v in cov.items()}))
     print(f"critic: {cr['candidates']} suspicious-but-safe runs, {len(cr['proposals'])} proposals")
     print(f"files written to {REPORTS}/: labels.jsonl risk_patterns.json rules.json taxonomy.json splits.json procedural.json "
-          "stage4_summary.json stage4_report.md gold_sample.csv gold_rule_labels.csv gold_guide.md")
+          "stage4_summary.json stage4_report.md")
 
 
 def cmd_label(a):
@@ -89,19 +86,6 @@ def cmd_accept(a):
     print("accepted; run `python stage4.py all ...` again to relabel with the extra rules")
 
 
-def cmd_gold_sample(a):
-    runs, labels, sc = load(a.data)
-    ch = gold.sample(labels, runs, sc, n=a.n, out_dir=REPORTS)
-    print(f"{len(ch)} runs written to {REPORTS}/gold_sample.csv; fill human_label_A (and B for a second person)")
-
-
-def cmd_gold_validate(a):
-    runs, labels, _ = load(a.data)
-    res = gold.validate(labels, a.a, a.b, os.path.join(REPORTS, "gold_validation.json"))
-    print(json.dumps({k: v for k, v in res.items() if k not in ("disagreements", "humans_disagree")}, indent=2))
-    print(f"{len(res.get('disagreements', []))} rule-vs-human disagreements listed in reports/gold_validation.json")
-
-
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -110,14 +94,12 @@ def main():
     def data(x):
         x.add_argument("--data", action="append", default=None, help="rows file (repeatable); its _summary.jsonl must sit next to it")
 
-    x = sub.add_parser("all"); data(x); x.add_argument("--min-support", type=int, default=2); x.add_argument("--gold-size", type=int, default=80); x.set_defaults(fn=cmd_all)
+    x = sub.add_parser("all"); data(x); x.add_argument("--min-support", type=int, default=2); x.set_defaults(fn=cmd_all)
     x = sub.add_parser("label"); data(x); x.set_defaults(fn=cmd_label)
     x = sub.add_parser("explain"); data(x); x.add_argument("--run", required=True); x.set_defaults(fn=cmd_explain)
     x = sub.add_parser("critic"); data(x); x.add_argument("--backend", choices=["heuristic", "groq"], default="heuristic")
     x.add_argument("--api-key", default=None); x.add_argument("--model", default="llama-3.3-70b-versatile"); x.set_defaults(fn=cmd_critic)
     x = sub.add_parser("critic-accept"); x.add_argument("ids"); x.set_defaults(fn=cmd_accept)
-    x = sub.add_parser("gold-sample"); data(x); x.add_argument("--n", type=int, default=80); x.set_defaults(fn=cmd_gold_sample)
-    x = sub.add_parser("gold-validate"); data(x); x.add_argument("--a", required=True); x.add_argument("--b", default=None); x.set_defaults(fn=cmd_gold_validate)
     a = p.parse_args()
     if getattr(a, "data", "x") is None:
         a.data = default

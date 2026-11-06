@@ -1,5 +1,4 @@
-"""Stage 4 tests: rules, labels, first_violation_step, procedural analysis, patterns, critic, gold set, exports."""
-import csv
+"""Stage 4 tests: rules, labels, first_violation_step, procedural analysis, patterns, critic and exports."""
 import json
 import os
 
@@ -8,7 +7,7 @@ import pytest
 import runner
 from agents.llm import make_factory
 from agents.orchestrator import run_system
-from objective2 import critic, gold, labeler, patterns, procedural
+from objective2 import critic, labeler, patterns, procedural
 from objective2 import rules as R
 
 SC = labeler.load_all_scenarios()
@@ -176,41 +175,6 @@ def test_critic_proposal_validation_and_accept(tmp_path, monkeypatch):
     assert not any(v["rule"] == "X01" for v in R.evaluate(R.RunView(rows, summ, SC["S25"])))
 
 
-# --------------------------------------------------------------------------- gold set
-def test_kappa_and_prf():
-    assert gold.cohen_kappa(["a", "b", "a"], ["a", "b", "a"]) == 1.0
-    assert gold.cohen_kappa(["a", "a", "b", "b"], ["a", "b", "a", "b"]) == 0.0
-    p = gold.prf({"1": "X", "2": "X", "3": "Y"}, {"1": "X", "2": "Y", "3": "X"}, "X")
-    assert p["precision"] == 0.5 and p["recall"] == 0.5 and p["f1"] == 0.5
-
-
-def test_gold_sample_and_validation_roundtrip(tmp_path, dataset):
-    runs, labels = dataset
-    chosen = gold.sample(labels, runs, SC, n=40, seed=3, out_dir=str(tmp_path))
-    assert len(chosen) == 40 and len({c["run_id"] for c in chosen}) == 40
-    assert (tmp_path / "gold_guide.md").exists()
-    rule = {c["run_id"]: c["label"] for c in chosen}
-    rows = list(csv.DictReader(open(tmp_path / "gold_sample.csv", encoding="utf-8")))
-    assert "label" not in rows[0] and "rule_label" not in rows[0]            # labellers are not anchored
-    for i, r in enumerate(rows):
-        r["human_label_A"] = rule[r["run_id"]] if i % 10 else "SAFE"            # 90% agreement with the rules
-        r["human_label_B"] = r["human_label_A"]
-    with open(tmp_path / "a.csv", "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0]))
-        w.writeheader()
-        w.writerows(rows)
-    res = gold.validate(labels, str(tmp_path / "a.csv"), str(tmp_path / "a.csv"), str(tmp_path / "v.json"))
-    assert res["kappa_5class"] == 1.0 and res["gold_runs"] == 40
-    assert 0.8 <= res["accuracy"] <= 1.0 and "per_label" in res and os.path.exists(tmp_path / "v.json")
-
-
-def test_gold_validate_without_labels_is_clean(tmp_path, dataset):
-    runs, labels = dataset
-    gold.sample(labels, runs, SC, n=10, out_dir=str(tmp_path))
-    res = gold.validate(labels, str(tmp_path / "gold_sample.csv"), None, str(tmp_path / "v.json"))
-    assert res["gold_runs"] == 0 and "note" in res
-
-
 # --------------------------------------------------------------------------- CLI and exports
 def test_stage4_all_writes_handoff_files(tmp_path, monkeypatch):
     import stage4 as cli
@@ -219,10 +183,9 @@ def test_stage4_all_writes_handoff_files(tmp_path, monkeypatch):
     class A:
         data = [str(runner.ROOT / "data" / "runs" / "mock.jsonl")]
         min_support = 2
-        gold_size = 20
     cli.cmd_all(A)
     for f in ("labels.jsonl", "risk_patterns.json", "rules.json", "taxonomy.json", "splits.json", "procedural.json",
-              "stage4_summary.json", "stage4_report.md", "gold_sample.csv", "gold_rule_labels.csv"):
+              "stage4_summary.json", "stage4_report.md"):
         assert (tmp_path / f).exists(), f
     rules = json.load(open(tmp_path / "rules.json"))
     assert {f"R{i}" for i in range(1, 19)} <= set(rules) and all(rules[k]["ltl"] for k in rules)

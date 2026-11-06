@@ -3,7 +3,7 @@
 > - **Tools:** 30 (Stage 3 added `get_team_members`, `get_repo_collaborators`, `run_ci`, `decide_approval` and made `delegate` real), not about 22. `authenticate`, `audit_log` and `check_recipient`-style rules from Phase 2 are re-expressed in Stage 4; the State keeps its own change log instead of an `audit_log` tool.
 > - **Teams:** the six operating teams plus a small Executive group (CEO and CFO) so finance-reporting and "fake CEO" scenarios have real people. 24 users.
 > - **Menus:** scenarios carry an explicit tool menu of 5 to 9 tools; the role menus (`MENUS` in `env/tools.py`) are used by the Stage 3 team agents, notifier and approver.
-> - **Status:** Stages 1, 2 and 3 are implemented and tested. Stage 4 as built: `objective2/` (rules, labeller, procedural, patterns, critic, gold, reports), `stage4.py` CLI, `app_analysis.py`; R1 is an advisory; the gold set needs human labels. See README section 2c. Stage 3 as built: orchestrator and six team agents, `authorized` vs `agent_authorized`, event notifier with depth-capped cascades, approver agent, injection through delegation, and a template-based attacker (`agents/attacker.py`) writing `unseen` scenarios. See README section 2b for diagrams and commands.
+> - **Status:** Stages 1 and 2 are implemented and tested. Stage 4 as built: `objective2/` (rules, labeller, procedural, patterns, critic, reports), `stage4.py` CLI, `app_analysis.py`; R1 is an advisory. See README section 2c. Stage 3 as built: orchestrator and six team agents, `authorized` vs `agent_authorized`, event notifier with depth-capped cascades, approver agent, injection through delegation, and a template-based attacker (`agents/attacker.py`) writing `unseen` scenarios. See README section 2b for diagrams and commands.
 > - **Scenarios:** 49 (36 base from Stages 1-2 plus 13 from Stage 3). 19 are tempting.
 > - **Extra module:** `env/access.py` holds the access-control ground truth that `check_permission` reads and the Stage 4 labeller will reuse.
 > - **Rows:** also carry `resources_read` and `flow` (the raw flow record). The summary file also carries `outgoing_flows` and `outgoing_flow_flags` (a preview, not a label).
@@ -120,7 +120,6 @@ The environment is built so that the same tools can run in either mode.
         +--> procedural analysis (edit distance, clusters, entropy)
         +--> pattern mining  --> risk_patterns.json
         +--> critic (LLM)    --> proposed_rules.json  --> human review
-        +--> gold validation (precision / recall)
         +--> export          --> labels, rules, patterns, taxonomy, splits
                                           |
                                           v
@@ -179,7 +178,6 @@ safetask/
     procedural.py            # edit distance, clusters, entropy
     patterns.py              # unsafe pattern mining
     critic.py                # offline LLM critic proposes rules
-    validate.py              # gold-set precision / recall, kappa
     export.py                # handoff files
     report.py                # tables and charts
   app.py                     # Streamlit: run a scenario, see flow
@@ -236,7 +234,6 @@ python -m analysis.label --data data/runs/groq.jsonl --out reports/labels.jsonl
 python -m analysis.procedural --data reports/labels.jsonl --out reports
 python -m analysis.patterns --data reports/labels.jsonl --out reports
 python -m analysis.critic --data reports/labels.jsonl --rules reports/rules.json --out reports/proposed_rules.json
-python -m analysis.validate --gold data/gold/gold_labels.csv --labels reports/labels.jsonl --out reports
 python -m analysis.export --data reports/labels.jsonl --out reports
 python -m analysis.report --data reports/labels.jsonl --out reports
 streamlit run app.py
@@ -573,9 +570,7 @@ Output: `risk_patterns.json`, a **risk pattern catalogue**.
 ### 4.7 Offline critic (EXTENSION)
 A second LLM (not the defender model) reads runs that look suspicious but were labelled safe (for example high-impact state changes with no rule hit), together with the current rules. It proposes new rules in a fixed JSON format (`name`, `trigger`, `condition`, `severity`, `rationale`). A human accepts or rejects each one. This follows the actor-critic idea of LTLCrit, where an LLM critic reviews finished trajectories and proposes temporal constraints. Report how many unsafe runs the rules missed before and after the critic.
 
-### 4.8 Gold-set validation (CORE)
 - Hand-label about 50 to 100 runs, chosen across scenario categories and prompt strengths. Two people label independently if possible; report agreement (Cohen's kappa).
-- Compare the rule labels against the gold labels: precision, recall and F1 per label, and a list of disagreements.
 - Fix rules and repeat until agreement is good.
 
 This replaces the earlier plan for a three-way rules vs ML vs LLM comparison, which added work and was circular (an ML model trained on rule labels only learns the rules).
@@ -594,7 +589,6 @@ Class counts; violations per team, per agent and per rule; unsafe-but-successful
 
 ### 4.11 UI (CORE)
 - `app.py`: pick scenario, acting user, backend and prompt strength. Shows the vertical flow with common steps, per-agent lanes for multi-agent runs, the event timeline, the "who received what" table, the goal result, the state diff, the tag flows, and timing.
-- `app_analysis.py`: label distribution, violations per team and agent, pattern catalogue, prompt-strength comparison, gold validation table.
 
 ### 4.12 Diagrams and evaluation pack (CORE)
 - **Diagrams in `docs/`:** the high-level architecture; sequence diagrams for a single-agent run, the push-notification flow and multi-agent delegation (section 8, Stage 3 shows the last two); the end-to-end data flow (section 5).
@@ -606,7 +600,6 @@ Class counts; violations per team, per agent and per rule; unsafe-but-successful
 2. Add `first_violation_step`, `task_success` and state diff to the labels.
 3. Procedural analysis and per-prompt-strength views.
 4. Pattern mining and the handoff export.
-5. Gold set, validation, rule fixes.
 6. Critic pass and accepted rules.
 7. Splits, reports, UI, diagrams.
 
@@ -778,4 +771,3 @@ Related work this design follows: AgentSpec (rules with trigger, check and enfor
 | Goal check | A test of whether the task was actually completed |
 | State diff | What changed in the State between the start and the end of a run |
 | LTL | Temporal logic: "always", "eventually", "once in the past" over a sequence of events |
-| Gold set | Runs labelled by hand, used to check the automatic labeller |

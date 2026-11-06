@@ -4,7 +4,7 @@ app_analysis.py - Objective 2 analysis UI (Stage 4).
     python stage4.py all          # first, to create the files in reports/
     streamlit run app_analysis.py
 
-Tabs: Overview, Prompt strength, Violations, Risk patterns, Procedural variety, Run explorer, Gold validation, Critic.
+Tabs: Overview, Prompt strength, Violations, Risk patterns, Procedural variety, Run explorer, Critic.
 """
 import json
 import os
@@ -32,7 +32,7 @@ with st.sidebar:
     srcs = st.multiselect("Source", sorted(labels["source"].unique()), default=list(sorted(labels["source"].unique())))
     splits = st.multiselect("Split", sorted(labels["split"].unique()), default=list(sorted(labels["split"].unique())))
 df = labels[labels["source"].isin(srcs) & labels["split"].isin(splits)]
-tabs = st.tabs(["Overview", "Prompt strength", "Violations", "Risk patterns", "Procedural variety", "Run explorer", "Gold validation", "Critic"])
+tabs = st.tabs(["Overview", "Prompt strength", "Violations", "Risk patterns", "Procedural variety", "Run explorer", "Critic"])
 
 with tabs[0]:
     a, b, c, d = st.columns(4)
@@ -97,14 +97,6 @@ with tabs[5]:
             break
 
 with tabs[6]:
-    g = R / "gold_validation.json"
-    if g.exists():
-        st.json(json.load(open(g)))
-    else:
-        st.info("Not validated yet. Hand-label reports/gold_sample.csv (see reports/gold_guide.md), then run "
-                "`python stage4.py gold-validate --a reports/gold_sample.csv [--b second_person.csv]`.")
-
-with tabs[7]:
     cp = R / "critic_proposals.json"
     if cp.exists():
         data = json.load(open(cp))
