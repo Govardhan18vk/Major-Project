@@ -24,79 +24,156 @@
     }
   },
   "runs": {
-    "total": 7,
+    "total": 473,
     "by_source": {
-      "groq": 7
+      "groq": 473
     },
     "note": "mock = scripted offline agent (tests the pipeline); groq = real LLM. They must never be mixed in conclusions.",
-    "distinct_trajectories": 3
+    "distinct_trajectories": 322
   },
   "label_distribution": {
-    "DECLINED": 7
+    "DECLINED": 179,
+    "SAFE": 157,
+    "SAFE_VARIANT": 8,
+    "UNSAFE_OUTCOME": 93,
+    "UNSAFE_PROCEDURAL": 36
   },
   "label_distribution_by_source": {
     "groq": {
-      "DECLINED": 7
+      "SAFE": 157,
+      "DECLINED": 179,
+      "UNSAFE_PROCEDURAL": 36,
+      "SAFE_VARIANT": 8,
+      "UNSAFE_OUTCOME": 93
     }
   },
   "label_distribution_by_split": {
+    "diverse": {
+      "DECLINED": 14,
+      "UNSAFE_PROCEDURAL": 5,
+      "UNSAFE_OUTCOME": 8
+    },
     "known": {
-      "DECLINED": 7
+      "SAFE": 157,
+      "DECLINED": 141,
+      "UNSAFE_PROCEDURAL": 30,
+      "SAFE_VARIANT": 8,
+      "UNSAFE_OUTCOME": 65
+    },
+    "unseen": {
+      "DECLINED": 24,
+      "UNSAFE_OUTCOME": 20,
+      "UNSAFE_PROCEDURAL": 1
     }
   },
-  "unsafe_rate": 0.0,
-  "unsafe_but_successful_rate": 0.0,
-  "unsafe_but_successful_share_of_unsafe": null,
-  "task_success_rate": 0.0,
-  "violations_per_rule": {},
-  "runs_with_violation_per_team": {},
-  "violations_per_agent": {},
+  "unsafe_rate": 0.2727,
+  "unsafe_but_successful_rate": 0.1882,
+  "unsafe_but_successful_share_of_unsafe": 0.6899,
+  "task_success_rate": 0.5285,
+  "violations_per_rule": {
+    "R2": 3,
+    "R3": 34,
+    "R4": 19,
+    "R5": 13,
+    "R7": 18,
+    "R9": 11,
+    "R10": 1,
+    "R11": 16,
+    "R12": 2,
+    "R13": 33,
+    "R14": 20,
+    "R15": 15,
+    "R16": 23,
+    "R17": 1
+  },
+  "runs_with_violation_per_team": {
+    "Shipping": 40,
+    "Platform": 21,
+    "HR": 4,
+    "Payments": 35,
+    "Risk": 29
+  },
+  "violations_per_agent": {
+    "assistant": 175,
+    "hr_agent": 5,
+    "vendor_agent": 5,
+    "shipping_agent": 1,
+    "notifier": 8,
+    "orchestrator": 7,
+    "platform_agent": 8
+  },
   "delegation_depth": {
-    "0": 7
+    "0": 376,
+    "1": 97
   },
   "event_chain_depth": {
-    "0": 7
+    "0": 469,
+    "1": 4
   },
   "time_to_first_violation": {
-    "mean_step": null,
-    "mean_sim_minutes": null
+    "mean_step": 3.4,
+    "mean_sim_minutes": 11.5
   },
   "unsafe_rate_by_prompt_strength": {
     "p0": {
-      "runs": 1,
-      "unsafe_rate": 0.0,
-      "outcome_rate": 0.0,
-      "declined_rate": 1.0,
-      "task_success_rate": 0.0,
-      "mean_path_entropy_bits": 0.0
+      "runs": 161,
+      "unsafe_rate": 0.4161,
+      "outcome_rate": 0.3106,
+      "declined_rate": 0.2236,
+      "task_success_rate": 0.6584,
+      "mean_path_entropy_bits": 0.673
+    },
+    "p1": {
+      "runs": 152,
+      "unsafe_rate": 0.2961,
+      "outcome_rate": 0.1974,
+      "declined_rate": 0.3158,
+      "task_success_rate": 0.5789,
+      "mean_path_entropy_bits": 0.656
     },
     "p2": {
-      "runs": 6,
-      "unsafe_rate": 0.0,
-      "outcome_rate": 0.0,
-      "declined_rate": 1.0,
-      "task_success_rate": 0.0,
-      "mean_path_entropy_bits": 1.0
+      "runs": 160,
+      "unsafe_rate": 0.1062,
+      "outcome_rate": 0.0813,
+      "declined_rate": 0.5938,
+      "task_success_rate": 0.35,
+      "mean_path_entropy_bits": 0.919
     }
   },
-  "mean_path_entropy_bits": 1.449,
+  "mean_path_entropy_bits": 1.917,
   "tokens": {
-    "total": 22699,
-    "mean_per_run": 3242.7
+    "total": 2019896,
+    "mean_per_run": 4270.4
   },
-  "mean_run_seconds": 17.1282,
+  "mean_run_seconds": 28.2935,
   "risk_patterns": {
-    "count": 0,
-    "coverage_by_split": {}
+    "count": 21,
+    "coverage_by_split": {
+      "known": {
+        "unsafe_runs": 95,
+        "matched": 72,
+        "coverage": 0.7579
+      },
+      "diverse": {
+        "unsafe_runs": 13,
+        "matched": 5,
+        "coverage": 0.3846
+      },
+      "unseen": {
+        "unsafe_runs": 21,
+        "matched": 3,
+        "coverage": 0.1429
+      }
+    }
   },
   "model_fingerprint": "not computed: needs real runs from at least two different models",
   "taxonomy_run_counts": {
-    "unauthorised_access": 0,
-    "data_leakage": 0,
-    "procedure_violation": 0,
-    "identity_and_delegation": 0,
-    "prompt_injection": 0,
-    "temporary_access": 0,
+    "unauthorised_access": 24,
+    "data_leakage": 54,
+    "procedure_violation": 56,
+    "identity_and_delegation": 2,
+    "prompt_injection": 19,
+    "temporary_access": 14,
     "advisory": 0
   }
 }
