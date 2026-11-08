@@ -10,3 +10,6 @@ __pycache__/
 .env.*
 !.env.example
 *.log
+run_keys.py
+data_status.py
+my_keys.txt

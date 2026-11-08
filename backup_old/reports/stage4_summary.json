@@ -1,0 +1,113 @@
+{
+  "environment": {
+    "scenarios": 64,
+    "teams": 7,
+    "users": 24,
+    "tools": 30,
+    "agent_roles": [
+      "assistant",
+      "orchestrator",
+      "payments_agent",
+      "shipping_agent",
+      "hr_agent",
+      "risk_agent",
+      "platform_agent",
+      "vendor_agent",
+      "notifier",
+      "approver"
+    ],
+    "rules": 18,
+    "known/diverse/unseen scenarios": {
+      "known": 46,
+      "diverse": 3,
+      "unseen": 15
+    }
+  },
+  "runs": {
+    "total": 16,
+    "by_source": {
+      "groq": 16
+    },
+    "note": "mock = scripted offline agent (tests the pipeline); groq = real LLM. They must never be mixed in conclusions.",
+    "distinct_trajectories": 8
+  },
+  "label_distribution": {
+    "DECLINED": 13,
+    "SAFE": 3
+  },
+  "label_distribution_by_source": {
+    "groq": {
+      "DECLINED": 13,
+      "SAFE": 3
+    }
+  },
+  "label_distribution_by_split": {
+    "known": {
+      "DECLINED": 13,
+      "SAFE": 3
+    }
+  },
+  "unsafe_rate": 0.0,
+  "unsafe_but_successful_rate": 0.0,
+  "unsafe_but_successful_share_of_unsafe": null,
+  "task_success_rate": 0.1875,
+  "violations_per_rule": {},
+  "runs_with_violation_per_team": {},
+  "violations_per_agent": {},
+  "delegation_depth": {
+    "0": 16
+  },
+  "event_chain_depth": {
+    "0": 16
+  },
+  "time_to_first_violation": {
+    "mean_step": null,
+    "mean_sim_minutes": null
+  },
+  "unsafe_rate_by_prompt_strength": {
+    "p0": {
+      "runs": 1,
+      "unsafe_rate": 0.0,
+      "outcome_rate": 0.0,
+      "declined_rate": 1.0,
+      "task_success_rate": 0.0,
+      "mean_path_entropy_bits": 0.0
+    },
+    "p1": {
+      "runs": 3,
+      "unsafe_rate": 0.0,
+      "outcome_rate": 0.0,
+      "declined_rate": 0.0,
+      "task_success_rate": 1.0,
+      "mean_path_entropy_bits": 0.918
+    },
+    "p2": {
+      "runs": 12,
+      "unsafe_rate": 0.0,
+      "outcome_rate": 0.0,
+      "declined_rate": 1.0,
+      "task_success_rate": 0.0,
+      "mean_path_entropy_bits": 0.838
+    }
+  },
+  "mean_path_entropy_bits": 0.956,
+  "tokens": {
+    "total": 51717,
+    "mean_per_run": 3232.3
+  },
+  "mean_run_seconds": 11.7281,
+  "risk_patterns": {
+    "count": 0,
+    "coverage_by_split": {}
+  },
+  "model_fingerprint": "not computed: needs real runs from at least two different models",
+  "taxonomy_run_counts": {
+    "unauthorised_access": 0,
+    "data_leakage": 0,
+    "procedure_violation": 0,
+    "identity_and_delegation": 0,
+    "prompt_injection": 0,
+    "temporary_access": 0,
+    "advisory": 0
+  }
+}

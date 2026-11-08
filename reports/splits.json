@@ -48,7 +48,7 @@
       "S48",
       "S49"
     ],
-    "runs": 7
+    "runs": 401
   },
   "diverse": {
     "scenarios": [
@@ -56,7 +56,7 @@
       "S35",
       "S36"
     ],
-    "runs": 0
+    "runs": 27
   },
   "unseen": {
     "scenarios": [
@@ -76,7 +76,7 @@
       "G014",
       "G015"
     ],
-    "runs": 0
+    "runs": 45
   },
   "rule": "rules and patterns are designed on `known` only; `diverse` checks generalisation; `unseen` is the final test"
 }
